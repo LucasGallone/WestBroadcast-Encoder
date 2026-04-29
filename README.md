@@ -21,13 +21,13 @@ Please refer to the `LICENSE` file for more details.
 This project uses the FFmpeg executable for encoding audio streams.
 <br>
 <br>
-• License: FFmpeg is licensed under the GNU General Public License (GPL) v3.0.
+• <b>License:</b> FFmpeg is licensed under the GNU General Public License (GPL) v3.0.
 <br>
-• Redistribution: The binary provided in this repository is an unmodified static version compiled by [Gyan.dev.](https://www.gyan.dev/ffmpeg/builds/)
+• <b>Redistribution:</b> The binary provided in this repository is an unmodified static version compiled by [Gyan.dev.](https://www.gyan.dev/ffmpeg/builds/)
 <br>
-• Source Code: In accordance with the GPL license, the FFmpeg source code is available on [ffmpeg.org.](https://ffmpeg.org/)
+• <b>Source Code:</b> In accordance with the GPL license, the FFmpeg source code is available on [ffmpeg.org.](https://ffmpeg.org/)
 <br>
-• Trademark: FFmpeg is a registered trademark of Fabrice Bellard, creator of the FFmpeg project.
+• <b>Trademark:</b> FFmpeg is a registered trademark of Fabrice Bellard, creator of the FFmpeg project.
 <br>
 <br>
 For more details, please refer to the `FFmpeg-LICENSE.txt` file included in this repository.
@@ -36,22 +36,22 @@ For more details, please refer to the `FFmpeg-LICENSE.txt` file included in this
 The `vue3.js` file included in the `/static` folder is part of the Vue.js library.
 <br>
 <br>
-• License: MIT License.
+• <b>License:</b> MIT License.
 <br>
-• Copyright (c) 2013-present, Yuxi (Evan) You.
+• <b>Copyright (c)</b> 2013-present, Yuxi (Evan) You.
 - - -
 ### Socket.io (JavaScript Client)
 The `socket.io.js` file included in the `/static` folder is part of the Socket.io library.
 <br>
 <br>
-• License: MIT License.
+• <b>License:</b> MIT License.
 <br>
-• Copyright (c) 2014-2025 Automattic.
+• <b>Copyright (c)</b> 2014-2025 Automattic.
 - - -
 ### Bootstrap (CSS Framework)
 The `bootstrap.min.css` file included in the `/static` folder is part of the Bootstrap framework.
 <br>
 <br>
-• License: MIT License.
+• <b>License:</b> MIT License.
 <br>
-• Copyright (c) 2011-2024 The Bootstrap Authors.
+• <b>Copyright (c)</b> 2011-2024 The Bootstrap Authors.
