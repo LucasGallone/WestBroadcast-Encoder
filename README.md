@@ -1,3 +1,4 @@
+# WestBroadcast Encoder
 WestBroadcast Encoder is a multi-output IP audio encoder, offering the ability for radio stations to stream audio to Icecast servers, as well as via RTP or through a built-in streaming server.
 <br>
 <br>
