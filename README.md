@@ -13,7 +13,7 @@ This broadcasting solution, based on FFmpeg and a Python script, is entirely ope
 <br>
 WestBroadcast Encoder runs as a portable installer. This means you can use it anywhere, even from an external hard drive or a USB drive.
 - - -
-<b>⚠️ At this time, the encoder only works on Windows. Optimizations are needed so that the project can run on Linux.</b>
+<b>⚠️ For now, the encoder only works on Windows. Optimizations are needed so that the project can run on Linux.</b>
 <br>
 <br>
 This software has been tested on several computers running Windows 10 and 11, with success.
