@@ -19,6 +19,9 @@ WestBroadcast Encoder runs as a portable installer. This means you can use it an
 This software has been tested on several computers running Windows 10 and 11, with success.
 <br>
 Any feedback regarding other operating systems is welcome!
+
+
+<img width="1912" height="1017" alt="wbencoder-main-preview" src="https://github.com/user-attachments/assets/a725e8e5-9a4e-4794-ae30-d8abbb9caaa2" />
 ## What this tool offers
 • <b>Audio stream encoding using the following codecs:</b>
 <br>
