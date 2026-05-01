@@ -8,7 +8,7 @@ Multiple destinations can be configured, allowing audio to be sent from studios 
 The encoders can be controlled remotely at any time via a secure web interface. An email alerts feature is also included to inform the user in the event of an incident (Silent streams or inability to connect to a streaming server).
 <br>
 <br>
-This broadcasting solution is entirely open source and is based on FFmpeg, as well as a Python script.
+This broadcasting solution, based on FFmpeg and a Python script, is entirely open source.
 <br>
 <br>
 WestBroadcast Encoder runs as a portable installer. This means you can use it anywhere, even from an external hard drive or a USB drive.
@@ -18,37 +18,38 @@ WestBroadcast Encoder runs as a portable installer. This means you can use it an
 <br>
 This software has been tested on several computers running Windows 10 and 11, with success.
 <br>
-Any quality feedback regarding other operating systems is welcome!
+Any feedback regarding other operating systems is welcome!
 ## What this tool offers
-• The ability to encode audio streams using the following codecs:
+• <b>Audio stream encoding using the following codecs:</b>
 <br>
-MP3, AAC (AAC-LC, HE-AAC V1, HE-AAC V2), OGG Opus, OGG Vorbis, FLAC, WAV, and MP2.
-<br>
-<br>
-• Streaming to Icecast (V2) servers.
+MP3, AAC* (AAC-LC, HE-AAC V1, HE-AAC V2), OGG Opus, OGG Vorbis, FLAC, WAV, and MP2.
 <br>
 <br>
-• Streaming on a built-in server, whose streams can be listened directly over a port, without additional installation.
+• <b>Streaming to Icecast (V2) servers.</b>
 <br>
 <br>
-• Streaming via RTP protocol, either in "pure" form (with an SDP file) or encapsulated in MPEG-TS.
+• <b>Streaming on a built-in server</b>, whose streams can be listened directly over a port, without additional installation.
 <br>
 <br>
-• The ability to broadcast a same stream to multiple servers at once, using a single instance.
+• <b>Streaming via RTP protocol</b>, either in "pure" form (with an SDP file) or encapsulated in MPEG-TS.
 <br>
 <br>
-• Full control over the bitrate, sample rate, bit depth, audio gain, ...
+• <b>Broadcasting the same stream to multiple servers at once</b>, using a single instance.
 <br>
 <br>
-• The ability to add latency before the audio encoding, in order to easily synchronize a stream with another.
+• <b>Full control over the bitrate, sample rate, bit depth, audio gain, etc.</b>
 <br>
 <br>
-• Sending "Currently Playing" metadata on your stream to display the title of the song being aired.
+• <b>Adjustable audio latency before encoding</b> to easily synchronize a stream with another.
+<br>
+<br>
+• <b>Sending "Currently Playing" metadata</b> on your stream to display the title of the song being aired.
 <br>
 -> This can be done by retrieving the content of a text file, from a HTML page, or by using the POST function in your automation software.
 <br>
 <br>
-• Sending email alerts via SMTP when one of your streams is silent, or the streaming server becomes unavailable.
+• <b>Sending email alerts via SMTP</b> when one of your streams is silent, or the streaming server becomes unavailable.
+> _* Encoding in AAC format requires the Fraunhofer FDK library, which is not included for legal reasons.<br>It can be downloaded directly via the interface or installed manually. Please refer to the Wiki section for details and instructions._
 ## 1. Installation instructions for Windows
 -> [Download the entire content of the repository by clicking here.](https://github.com/LucasGallone/WestBroadcast-Encoder/archive/refs/heads/main.zip)
 <br>
@@ -90,6 +91,9 @@ At each startup, the script checks that all required dependencies are present on
 Need help configuring the encoder or understanding a specific setting?
 <br>
 👉 [Click here to visit the Wiki section for detailed documentation.](https://github.com/LucasGallone/WestBroadcast-Encoder/wiki)
+<br>
+<br>
+If you discover any bugs, despite the rigorous pre-release testing, don't hesitate to report them in the ["Issues" section.](https://github.com/LucasGallone/WestBroadcast-Encoder/issues)
 ## Legal Notices and Licenses
 ### WestBroadcast Encoder
 This project is licensed under the GNU General Public License (GPL) v3.0.
@@ -134,3 +138,19 @@ The `bootstrap.min.css` file included in the `/static` folder is part of the Boo
 • <b>License:</b> MIT License.
 <br>
 • <b>Copyright (c)</b> 2011-2024 The Bootstrap Authors.
+- - -
+### Python Dependencies
+This project uses the following libraries, automatically installed by the Launcher script:
+<br>
+<br>
+• <b>Flask / Werkzeug:</b> BSD-3-Clause License.
+<br>
+• <b>Flask-SocketIO:</b> MIT License.
+<br>
+• <b>Sounddevice / PortAudio:</b> MIT License.
+<br>
+• <b>NumPy:</b> BSD-3-Clause License.
+<br>
+• <b>psutil:</b> BSD-3-Clause License.
+<br>
+• <b>Requests:</b> Apache License 2.0.
