@@ -21,7 +21,8 @@ This software has been tested on several computers running Windows 10 and 11, wi
 Any feedback regarding other operating systems is welcome!
 
 
-<img width="1912" height="1017" alt="wbencoder-main-preview" src="https://github.com/user-attachments/assets/a725e8e5-9a4e-4794-ae30-d8abbb9caaa2" />
+<img width="1910" height="1016" alt="wbencoder-main-preview" src="https://github.com/user-attachments/assets/e5df0d2c-9b55-4de9-92c3-ba240ef8d009" />
+
 ## What this tool offers
 • <b>Audio stream encoding using the following codecs:</b>
 <br>
