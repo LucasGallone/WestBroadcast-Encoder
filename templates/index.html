@@ -1,0 +1,1665 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    {% if config %}
+        <title>WestBroadcast Encoder{% if (logged_in or not config.settings.hide_instance_on_login) and config.settings.instance_name %} - {{ config.settings.instance_name }}{% endif %}</title>
+    {% else %}
+        <title>WestBroadcast Encoder</title>
+    {% endif %}
+    <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
+    {% if logged_in %}
+    <script src="{{ url_for('static', filename='vue3.js') }}"></script>
+    <script src="{{ url_for('static', filename='socket.io.js') }}"></script>
+    {% endif %}
+    <style>
+        .vu-bar {
+            background-color: #ffc107 !important;
+            transition: width 0.08s ease-out !important;
+            will-change: width;
+        }
+        .text-amber { color: #c78100 !important; }
+        .bg-amber { background-color: #c78100 !important; color: white !important;}
+        
+        .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center; }
+        .modal-box { background: white; padding: 30px; border-radius: 8px; width: 850px; max-width: 95%; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .logs-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left; }
+        .logs-table th, .logs-table td { padding: 8px; border-bottom: 1px solid #eee; }
+        .logs-table th { background: #f2f2f2; color: #333; }
+        .log-ERROR { color: #d9534f; font-weight: bold; }
+        .log-WARNING { color: #e67e22; font-weight: bold; }
+        .log-INFO { color: #17a2b8; font-weight: bold; }
+        .log-RECOVERY { color: #28a745; font-weight: bold; }
+        .log-SYSTEM { color: #6f42c1; font-weight: bold; }
+        .log-AUTH { color: #c78100; font-weight: bold; }
+        .settings-card { border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden; height: 100%; }
+        .settings-header { background-color: #f8f9fa; border-bottom: 1px solid #dee2e6; padding: 12px 20px; }
+        .settings-body { padding: 20px; background: white; }
+        
+        /* Style for stream tabs - "Selector Pill" design */
+        .stream-tab { 
+            cursor: pointer; padding: 6px 20px; border: 2px solid #dee2e6; border-radius: 30px; 
+            background: #fdfdfd; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease; font-weight: 700; color: #888; 
+            display: flex; align-items: center; gap: 10px; font-size: 0.85rem;
+        }
+
+        /* Classes for Vue.js drag-and-drop animation */
+        /* Smooth, seamless animation for movement (no transition when switching tabs) */
+        .drag-server-move, .drag-stream-move { transition: transform 0.3s ease; }
+        
+        /* Full anti-flickering: Disables highlighting of child elements during dragging */
+        .is-dragging-active .stream-tab *, .is-dragging-active .server-card * { pointer-events: none !important; }
+        .is-dragging-active .stream-tab, .is-dragging-active .server-card { pointer-events: auto !important; }
+        .is-dragging { opacity: 0.2 !important; pointer-events: none !important; }
+        
+        /* Design of the Notches (Handles) for Movement */
+        .server-card { position: relative; padding-top: 25px !important; border-radius: 8px; }
+        .stream-tab { position: relative; padding: 6px 20px 6px 32px; overflow: hidden; }
+        
+        .drag-handle {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-color: #dee2e6;
+            color: #6c757d;
+            padding: 2px 6px;
+            font-size: 0.8rem;
+            cursor: grab;
+        }
+        .server-card .drag-handle { border-bottom-right-radius: 6px; }
+        .stream-tab .drag-handle { height: 100%; display: flex; align-items: center; border-radius: 0; }
+        .drag-handle:active { cursor: grabbing; color: #495057; background-color: #ced4da; }
+        .stream-tab:hover { background: #f8f9fa; border-color: #adb5bd; color: #555; }
+        .stream-tab.active { 
+            background: #fff; color: #0d6efd; border-color: #0d6efd; 
+            box-shadow: 0 4px 8px rgba(13, 110, 253, 0.15); 
+        }
+        /* Clear delineation of the main tabs */
+        .nav-tabs .nav-link { font-weight: 600; color: #6c757d; background-color: #e9ecef; border: 1px solid #dee2e6; margin-right: 4px; border-radius: 6px 6px 0 0; padding: 10px 20px; }
+        .nav-tabs .nav-link:hover { background-color: #d1d5db; color: #495057; }
+        .nav-tabs .nav-link.active { color: #0d6efd; background-color: #fff; border-color: #dee2e6 #dee2e6 #fff; box-shadow: 0 -2px 5px rgba(0,0,0,0.03); }
+        
+        /* Background image for the Login page */
+        .login-bg { 
+            background-image: url("{{ url_for('static', filename='login-page-bg.jpg') }}") !important;
+            background-size: cover !important; 
+            background-position: center !important; 
+            background-repeat: no-repeat !important; 
+            background-attachment: fixed !important;
+        }
+
+        /* Toast notification with transition */
+        .toast-container {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            z-index: 10001;
+        }
+        .custom-toast {
+            background: #28a745;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-width: 300px;
+        }
+        /* Transition classes for Vue.js */
+        .toast-enter-active, .toast-leave-active {
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .toast-enter {
+            transform: translateX(120%);
+            opacity: 0;
+        }
+        .toast-leave-to {
+            transform: translateX(120%);
+            opacity: 0;
+        }
+        .btn-close-white { filter: invert(1) grayscale(100%) brightness(200%); }
+
+        /* Custom CSS Tooltip */
+        .custom-tooltip-icon {
+            position: relative;
+            cursor: help;
+        }
+        .custom-tooltip-icon::after {
+            content: attr(data-title);
+            position: absolute;
+            bottom: 130%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: normal;
+            white-space: pre-line; /* Allows &#10; line breaks to be interpreted */
+            width: max-content;
+            max-width: 250px;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            z-index: 1050;
+            pointer-events: none;
+            line-height: 1.4;
+        }
+        .custom-tooltip-icon::before {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            z-index: 1050;
+            pointer-events: none;
+        }
+        .custom-tooltip-icon:hover::after, .custom-tooltip-icon:hover::before {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Tooltips */
+        .tooltip-left::after {
+            left: auto !important;
+            right: 0 !important;
+            transform: translateX(10%) !important;
+        }
+        .tooltip-left::before {
+            left: auto !important;
+            right: 5px !important;
+            transform: none !important;
+        }
+
+        /* ==================================================
+           DARK MODE OVERRIDES
+           ================================================== */
+        body.dark-mode { background-color: #121212 !important; color: #e0e0e0 !important; }
+        body.dark-mode .bg-light, body.dark-mode .bg-white, body.dark-mode .card, body.dark-mode .settings-body, body.dark-mode .modal-box {
+            background-color: #1e1e1e !important; color: #e0e0e0 !important; border-color: #333 !important;
+        }
+        body.dark-mode .settings-header, body.dark-mode .card-header {
+            background-color: #2a2a2a !important; border-color: #444 !important; color: #fff !important;
+        }
+        body.dark-mode .text-dark { color: #f8f9fa !important; }
+        body.dark-mode .text-muted { color: #aaa !important; }
+        body.dark-mode .border, body.dark-mode .border-bottom, body.dark-mode .border-top, body.dark-mode .border-end {
+            border-color: #333 !important;
+        }
+        
+        body.dark-mode .text-primary { color: #fff !important; }
+        
+        body.dark-mode .text-success { color: #2ecc71 !important; }
+        body.dark-mode .border-success { border-color: #2ecc71 !important; }
+
+        body.dark-mode .nav-tabs { border-bottom-color: #333 !important; }
+
+        body.dark-mode .settings-card > .bg-light.border-top.text-center { 
+            background-color: transparent !important; 
+            border-top: none !important; 
+            padding-bottom: 30px !important; 
+        }
+
+        body.dark-mode .form-control, body.dark-mode .form-select, body.dark-mode .input-group-text {
+            background-color: #2a2a2a !important; color: #e0e0e0 !important; border-color: #444 !important;
+        }
+        body.dark-mode .form-control:focus, body.dark-mode .form-select:focus {
+            background-color: #333 !important; color: #fff !important; border-color: #0d6efd !important;
+        }
+
+        body.dark-mode .form-control::placeholder { color: #777 !important; opacity: 1; }
+        
+        body.dark-mode .form-control:disabled { background-color: #1a1a1a !important; border-color: #333 !important; color: #aaa !important; }
+        body.dark-mode .form-control:disabled::placeholder { color: #aaa !important; opacity: 1; }
+        
+        body.dark-mode .nav-tabs .nav-link {
+            background-color: #2a2a2a !important; color: #aaa !important; border-color: #444 !important;
+        }
+        body.dark-mode .nav-tabs .nav-link:hover { background-color: #383838 !important; color: #fff !important; }
+        body.dark-mode .nav-tabs .nav-link.active {
+            background-color: #1e1e1e !important; color: #6ea8fe !important; border-color: #444 #444 #1e1e1e !important;
+        }
+        body.dark-mode .stream-tab { background-color: #2a2a2a !important; border-color: #444 !important; color: #aaa !important; }
+        body.dark-mode .stream-tab.active { background-color: #1e1e1e !important; border-color: #6ea8fe !important; color: #6ea8fe !important; }
+        body.dark-mode .stream-tab:hover { background-color: #383838 !important; border-color: #666 !important; color: #fff !important; }
+        body.dark-mode .drag-handle { background-color: #333 !important; color: #888 !important; }
+        body.dark-mode .server-card .drag-handle { background-color: #333 !important; }
+        body.dark-mode .logs-table th { background-color: #2a2a2a !important; color: #e0e0e0 !important; border-color: #444 !important; }
+        body.dark-mode .logs-table td { border-color: #333 !important; }
+        body.dark-mode .custom-tooltip-icon::after { background-color: #444 !important; color: #fff !important; box-shadow: 0 4px 10px rgba(0,0,0,0.8) !important; }
+        body.dark-mode .custom-tooltip-icon::before { border-top-color: #444 !important; }
+        body.dark-mode .btn-outline-primary { color: #6ea8fe; border-color: #6ea8fe; }
+        body.dark-mode .btn-outline-primary:hover, body.dark-mode .btn-outline-primary:active, body.dark-mode .btn-check:checked+.btn-outline-primary { background-color: #6ea8fe; color: #1e1e1e; border-color: #6ea8fe; }
+        
+        body.dark-mode .btn-outline-success { color: #2ecc71 !important; border-color: #2ecc71 !important; }
+        body.dark-mode .btn-outline-success:hover { background-color: #2ecc71 !important; color: #1e1e1e !important; border-color: #2ecc71 !important; }
+        
+        body.dark-mode .alert-warning { background-color: #4d3800 !important; color: #ffda6a !important; border-color: #664d03 !important; }
+
+        body.dark-mode .btn-light { background-color: #333 !important; color: #f8f9fa !important; border-color: #444 !important; }
+        body.dark-mode .btn-light:hover { background-color: #444 !important; color: #fff !important; }
+
+        body.dark-mode .btn-outline-dark { color: #ccc !important; border-color: #555 !important; }
+        body.dark-mode .btn-outline-dark:hover { background-color: #333 !important; color: #fff !important; border-color: #777 !important; }
+    </style>
+</head>
+<body class="{% if not logged_in %}login-bg d-flex align-items-center justify-content-center{% else %}bg-light{% endif %}" {% if not logged_in %}style="height: 100vh;"{% endif %}>
+
+    {% if not logged_in %}
+        <div class="card p-4 shadow" style="width: 420px; max-width: 95%;">
+            <div class="text-center mb-4 lh-sm">
+                <h3 class="mb-1" style="white-space: nowrap;">WestBroadcast Encoder</h3>
+                {% if config and not config.settings.hide_instance_on_login %}
+                <h6 class="text-secondary mt-2 fw-normal">{{ config.settings.instance_name }}</h6>
+                {% endif %}
+            </div>
+            <form method="POST" action="/">
+                <input type="password" name="password" class="form-control mb-3" placeholder="Password" required>
+                <button class="btn btn-primary w-100" type="submit">Login</button>
+                {% if error %}<p class="text-danger mt-2 text-center"><b>{{ error }}</b></p>{% endif %}
+            </form>
+        </div>
+    {% else %}
+        {% raw %}
+        <div id="app">
+            <!-- Toast Notification System with Exit Animation -->
+            <transition name="toast">
+                <div v-if="toast.show" class="toast-container">
+                    <div class="custom-toast">
+                        <div class="d-flex align-items-center">
+                            <span class="fw-bold">{{ toast.message }}</span>
+                        </div>
+                    </div>
+                </div>
+            </transition>
+
+            <!-- MODAL FOR THE FDK-AAC DLL INSTALLATION -->
+            <div v-if="show_fdk_modal" class="modal" style="display: flex; z-index: 10002;">
+                <div class="modal-box text-center" style="width: 600px; max-width: 95%;">
+                    <h3 class="text-danger mb-3 fw-bold">Missing Component</h3>
+                    <p class="fs-5">The library required for encoding AAC-LC and HE-AAC V1/V2 streams is not present on the host machine.</p>
+                    <div class="bg-light border rounded p-3 text-start mb-4">
+                        <p class="mb-2">The Fraunhofer FDK AAC library (libfdk-aac.dll) must be downloaded.<br>This engine offers professional audio quality, infinitely richer and more precise than standard encoders. For legal reasons, it is not possible to include it directly in this project.</p>
+                        <p class="mb-0 text-muted small">You have two options to obtain this library:</p>
+                        <ul class="mb-0 small text-muted">
+                            <li><b>Automatic download:</b> Click the button below to download the DLL.</li>
+                            <li><b>Manual download:</b> Download it yourself from the source of your choice, place it in the encoder folder, and rename it strictly to <code>libfdk-aac.dll</code>.</li>
+                        </ul>
+                    </div>
+                    
+                    <button v-if="!fdk_downloading" class="btn btn-success fw-bold w-100 py-2 mb-2 shadow-sm" @click="downloadFDK()">⬇️ Click here to download the DLL automatically</button>
+                    <button v-if="fdk_downloading" class="btn btn-secondary fw-bold w-100 py-2 mb-2" disabled>⏳ Downloading and installing... Please wait.</button>
+                    
+                    <button type="button" class="btn btn-outline-dark w-100 fw-bold py-2 shadow-sm" @click="show_fdk_modal = false">Close</button>
+                </div>
+            </div>
+
+            <nav class="navbar navbar-dark bg-dark">
+                <div class="container-fluid">
+                    <div class="navbar-brand mb-0 lh-sm py-1">
+                        <div style="font-size: 1.25rem; font-weight: bold;">WestBroadcast Encoder</div>
+                        <div v-if="config.settings.instance_name" style="font-size: 0.85rem; font-weight: normal; color: #adb5bd; margin-top: 2px;">{{ config.settings.instance_name }}</div>
+                    </div>
+                    <div class="text-white d-flex align-items-center">
+                        <div class="d-flex flex-column align-items-end justify-content-center me-3" style="line-height: 1.2;">
+                            <div id="navbar-uptime" style="font-size: 0.85rem; color: #adb5bd;" :style="savedEnableMonitoring ? 'margin-bottom: 6px;' : ''">
+                                Uptime: 00:00:00
+                            </div>
+                            <div v-if="savedEnableMonitoring" style="font-size: 0.85rem;">
+                                <span class="badge bg-secondary me-1 py-1 px-2">CPU: <span id="navbar-cpu">0</span>%</span>
+                                <span class="badge bg-secondary py-1 px-2">RAM: <span id="navbar-ram">0</span>%</span>
+                            </div>
+                        </div>
+                        <a href="/logout" class="btn btn-sm btn-danger">Logout</a>
+                    </div>
+                </div>
+            </nav>
+
+            <form id="main-form" class="container mt-4 mb-5" @submit.prevent @keydown.enter.prevent="saveConfig()" novalidate>
+                <ul class="nav nav-tabs mb-4">
+                    <li class="nav-item"><a class="nav-link" :class="{active: tab=='dashboard'}" @click.prevent="switchTab('dashboard')" href="#">Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link" :class="{active: tab=='servers'}" @click.prevent="switchTab('servers')" href="#">Servers ({{ config.servers.length }})</a></li>
+                    <li class="nav-item"><a class="nav-link" :class="{active: tab=='streams'}" @click.prevent="switchTab('streams')" href="#">Streams ({{ config.streams.length }})</a></li>
+                    <li class="nav-item"><a class="nav-link" :class="{active: tab=='settings'}" @click.prevent="switchTab('settings')" href="#">General Settings</a></li>
+                    <li class="nav-item"><a class="nav-link" :class="{active: tab=='smtp'}" @click.prevent="switchTab('smtp')" href="#">SMTP Settings</a></li>
+                </ul>
+
+                <!-- DASHBOARD TAB -->
+                <div v-if="tab=='dashboard'">
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <button class="btn btn-success" @click="startAll">Start All Streams</button>
+                            <button class="btn btn-danger ms-2" @click="stopAll">Stop All Streams</button>
+                        </div>
+                        <div v-for="stream in config.streams" class="col-md-4 mb-3">
+                            <div class="card shadow-sm" :class="{'border-success': getStatus(stream.id).running}">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <div style="min-width: 0;">
+                                            <h5 class="card-title mb-0 text-truncate pb-1" :title="stream.name">{{ stream.name }}</h5>
+                                            <small class="text-muted fw-bold">{{ {mp3: 'MP3', aac_lc: 'AAC-LC', he_aac: 'AAC+ (HE-AAC V1)', he_aac_v2: 'eAAC+ (HE-AAC V2)', opus: 'OGG Opus', ogg: 'OGG Vorbis', flac: 'FLAC', wav: 'WAV', mp2: 'MP2'}[stream.format] || stream.format }} | <span v-if="stream.format !== 'flac' && stream.format !== 'wav'">{{ stream.bitrate.replace('k', '') }} Kbps</span><span v-else>Lossless</span></small>
+                                        </div>
+                                        <div class="ms-2 flex-shrink-0">
+                                            <span v-if="getStatus(stream.id).error" class="badge bg-amber shadow-sm" style="cursor: pointer;" @click="showErrorDetails(getStatus(stream.id).error_msg)">
+                                                ⚠️ Failed to Connect <span class="badge bg-dark text-white ms-1 rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 14px; height: 14px; font-size: 0.65rem;">?</span>
+                                            </span>
+                                            <span v-else-if="getStatus(stream.id).connecting" class="badge bg-amber shadow-sm opacity-75">
+                                                🟡 Connecting...
+                                            </span>
+                                            <span v-else-if="getStatus(stream.id).running" class="badge bg-success shadow-sm">🟢 Online</span>
+                                            <span v-else class="badge bg-danger shadow-sm">🔴 Offline</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div v-show="getStatus(stream.id).running" class="mb-3 bg-dark p-2 rounded" style="box-shadow: inset 0 0 5px rgba(0,0,0,0.5);">
+                                        <div class="d-flex justify-content-between text-white mb-1" style="font-size: 0.75rem; font-family: monospace;">
+                                            <span :id="'txt-l-' + stream.id">L: -60.0 dB</span>
+                                            <span :id="'txt-r-' + stream.id">R: -60.0 dB</span>
+                                        </div>
+                                        <div class="progress mb-1" style="height: 6px; background-color: #444;">
+                                            <div :id="'bar-l-' + stream.id" class="progress-bar vu-bar" style="width: 0%;"></div>
+                                        </div>
+                                        <div class="progress" style="height: 6px; background-color: #444;">
+                                            <div :id="'bar-r-' + stream.id" class="progress-bar vu-bar" style="width: 0%;"></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="bg-light border rounded p-2 mb-3 small shadow-sm">
+                                        <div class="d-flex justify-content-between align-items-center mb-1 text-muted">
+                                            <span class="text-truncate">
+                                                <strong class="text-dark">⏱ Uptime: </strong>
+                                                <span v-if="getStatus(stream.id).uptime === 0" class="fst-italic pe-1">Stopped</span>
+                                                <span v-else>{{ formatUptime(getStatus(stream.id).uptime) }}</span>
+                                            </span>
+                                            <span v-if="getStatus(stream.id).running" class="badge border border-primary text-primary" style="font-size:0.7rem;">
+                                                👥 <span v-if="getStatus(stream.id).listeners === -1">Unavailable</span>
+                                                   <span v-else>{{ getStatus(stream.id).listeners }} Listener{{ getStatus(stream.id).listeners === 1 ? '' : 's' }}</span>
+                                            </span>
+                                        </div>
+
+                                        <div class="mt-2 pt-1 border-top text-truncate">
+                                            <strong>🎵 Title: </strong>
+                                            <span v-if="['flac', 'opus'].includes(stream.format)" class="text-muted fst-italic">Unsupported by this codec</span>
+                                            <span v-else-if="!stream.meta_source || stream.meta_source === 'none'" class="text-muted fst-italic">Disabled</span>
+                                            <span v-else>
+                                                <span v-if="getStatus(stream.id).title" :title="getStatus(stream.id).title">{{ getStatus(stream.id).title }}</span>
+                                                <span v-else class="text-muted fst-italic">Waiting for metadata...</span>
+                                            </span>
+                                        </div>
+                                        
+                                        <!-- Dynamic destinations with overview -->
+                                        <div class="mt-2 pt-2 border-top d-flex align-items-center">
+                                            <span class="me-2 lh-1" style="font-size: 1.1rem;">🌐</span>
+                                            <div class="d-flex flex-wrap gap-1">
+                                                <span v-if="!stream.targets || stream.targets.length === 0" class="text-muted lh-1 mt-1">None</span>
+                                                <span v-for="targetId in stream.targets" class="badge bg-secondary d-flex align-items-center" :title="getServerUrl(targetId, stream.mount)" style="cursor: help; padding-top: 0.4em; padding-bottom: 0.4em;">
+                                                    {{ getServerName(targetId) }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <a v-if="getStatus(stream.id).running && getStatus(stream.id).sdp" :href="'/api/sdp/' + stream.id" target="_blank" class="btn btn-info btn-sm w-100 mb-1 fw-bold text-white shadow-sm">⬇️ Download SDP File</a>
+                                    <button v-if="!getStatus(stream.id).running" @click="controlStream(stream.id, 'start')" class="btn btn-success btn-sm w-100 mb-1">Start</button>
+                                    <button v-if="getStatus(stream.id).running" @click="controlStream(stream.id, 'stop')" class="btn btn-danger btn-sm w-100">Stop</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-if="config.streams.length === 0" class="alert alert-warning">No stream have been set up yet. Go to the "Streams" tab to create one.</div>
+                    </div>
+                </div>
+
+                <!-- SERVERS TAB -->
+                <div v-if="tab=='servers'" key="tab-servers">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <button type="button" class="btn btn-primary" @click="addServer">Add New Streaming Server</button>
+                        <button type="button" v-if="config.servers.length > 0" class="btn btn-success fw-bold" @click="saveConfig()">Save Configuration</button>
+                    </div>
+                    
+                    <transition-group name="drag-server" tag="div" :class="{'is-dragging-active': draggedServerIndex !== null}">
+                        <div v-for="(srv, index) in config.servers" 
+                             :key="srv.id" 
+                             class="card mb-2 p-3 shadow-sm border-0 server-card"
+                             :class="{'is-dragging': draggedServerIndex === index}"
+                             @dragenter.prevent="dragEnterServer(index)"
+                             @dragover.prevent
+                             @drop.prevent="dropServer()">
+                            <div class="drag-handle" title="Drag to reorder"
+                                 draggable="true"
+                                 @dragstart="dragStartServer(index)"
+                                 @dragend="dragEndServer()">⋮⋮</div>
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-3">
+                                    <label class="small text-muted fw-bold mb-1">Server Name</label>
+                                    <span v-if="unsavedServers.includes(srv.id)" class="text-danger fw-bold ms-1" title="Unsaved changes">*</span>
+                                    <input v-model="srv.name" class="form-control form-control-sm" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="small text-muted fw-bold mb-1">Server Type</label>
+                                    <select v-model="srv.type" class="form-select form-select-sm">
+                                        <option value="icecast2">Icecast 2</option>
+                                        <option value="internal">Built-in HTTP Server</option>
+                                        <option value="rtp_pure">RTP (Pure / SDP)</option>
+                                        <option value="rtp_mpegts">RTP (MPEG-TS)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="small text-muted fw-bold mb-1">IP / Domain</label>
+                                    <input v-model="srv.ip" class="form-control form-control-sm" :disabled="srv.type === 'internal'" :placeholder="srv.type === 'internal' ? '0.0.0.0 (Auto)' : ''" :required="srv.type !== 'internal'">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="small text-muted fw-bold mb-1">Port</label>
+                                    <input v-model="srv.port" type="number" min="1" max="65535" class="form-control form-control-sm" required>
+                                </div>
+                                <div class="col-md-1 d-flex justify-content-end">
+                                    <button type="button" class="btn btn-outline-danger btn-sm px-2 py-1" style="border-width: 1.5px;" @click="deleteServer(index)" title="Delete Server">
+                                        <!-- Trash icon for the servers tab -->
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash3" viewBox="0 0 16 16">
+                                            <path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5ZM11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H2.506a.58.58 0 0 0-.01 0H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1h-.995a.59.59 0 0 0-.01 0H11Zm1.958 1-.846 10.58a1 1 0 0 1-.997.92h-6.23a1 1 0 0 1-.997-.92L3.042 3.5h9.916Zm-7.487 1a.5.5 0 0 1 .528.47l.5 8.5a.5.5 0 0 1-.998.06L5 5.03a.5.5 0 0 1 .47-.53Zm5.058 0a.5.5 0 0 1 .47.53l-.5 8.5a.5.5 0 1 1-.998-.06l.5-8.5a.5.5 0 0 1 .528-.47ZM8 4.5a.5.5 0 0 1 .5.5v8.5a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5Z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </transition-group>
+                </div>
+
+                <!-- STREAMS TAB -->
+                <div v-if="tab=='streams'" key="tab-streams">
+                    <div class="d-flex align-items-center mb-3">
+                        <button type="button" class="btn btn-primary" @click="addStream">Add New Stream</button>
+                        <button type="button" v-if="config.streams.length > 0" class="btn btn-success fw-bold ms-2" @click="saveConfig()">Save Configuration for All Streams</button>
+                        <button type="button" v-if="config.streams.length > 1" class="btn btn-outline-secondary ms-auto fw-bold" @click="sortStreamsAZ">🔤 Sort streams alphabetically</button>
+                    </div>
+
+                    <transition-group name="drag-stream" tag="div" v-if="config.streams.length > 0" class="d-flex flex-wrap gap-2 mb-3 bg-white p-2 rounded border" :class="{'is-dragging-active': draggedStreamIndex !== null}">
+                        <div v-for="(s, index) in config.streams" 
+                             :key="s.id"
+                             class="stream-tab" 
+                             :class="{active: activeStreamIndex === index, 'is-dragging': draggedStreamIndex === index}" 
+                             @click="activeStreamIndex = index; showStreamPassword = false;"
+                             @dragenter.prevent="dragEnter(index)"
+                             @dragover.prevent 
+                             @drop.prevent="drop()">
+                            <div class="drag-handle" title="Drag to reorder"
+                                 draggable="true"
+                                 @dragstart="dragStart(index)" 
+                                 @dragend="dragEnd()">⋮⋮</div>
+                            <span :style="{ opacity: activeStreamIndex === index ? 1 : 0.4 }" style="font-size: 1.1rem;" class="ms-1">🔊</span> 
+                            {{ s.name || 'Unnamed' }}
+                            <span v-if="unsavedStreams.includes(s.id)" class="text-danger ms-1 fw-bold fs-5 lh-1" title="Unsaved modifications">*</span>
+                        </div>
+                    </transition-group>
+
+                    <!-- Active stream container only -->
+                    <div v-if="config.streams.length > 0 && config.streams[activeStreamIndex]" class="card border-primary shadow-sm mb-4">
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-2">
+                            <b class="d-flex align-items-center fs-5">
+                                <!-- Add a presence check (config.streams[activeStreamIndex]) -->
+                                {{ config.streams[activeStreamIndex] ? config.streams[activeStreamIndex].name : 'No Stream Selected' }}
+                                <button class="btn btn-sm btn-light ms-3 py-1 px-2 text-dark fw-bold" style="font-size: 0.75rem; border-radius: 12px;" @click="renameStream(config.streams[activeStreamIndex])" title="Rename stream">✏️ Rename</button>
+                            </b>
+                            <!-- The delete button is only displayed if the feed is not currently running -->
+                            <button v-if="tab === 'streams' && !getStatus(config.streams[activeStreamIndex].id).running" class="btn btn-danger btn-sm" @click="deleteStream(activeStreamIndex)">Delete Stream</button>
+                            <span v-show="getStatus(config.streams[activeStreamIndex].id).running" class="badge bg-danger fs-6">Cannot delete: The stream is currently being encoded</span>
+                        </div>
+                        <div class="card-body bg-light p-4">
+                            
+                            <div class="mb-4 bg-white p-3 border rounded shadow-sm">
+                                <div class="form-check form-switch mb-0">
+                                    <input type="checkbox" v-model="config.streams[activeStreamIndex].auto_start" class="form-check-input" :id="'autostart_'+config.streams[activeStreamIndex].id" style="width: 2.2em; height: 1.1em; cursor: pointer; margin-top: 0.1em;">
+                                    <label class="form-check-label fw-bold text-primary ms-2" :for="'autostart_'+config.streams[activeStreamIndex].id" style="cursor: pointer;">Auto-start this stream on software boot</label>
+                                </div>
+                            </div>
+
+                            <h6 class="text-primary border-bottom pb-2 mb-3 fw-bold">Audio Settings</h6>
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-4">
+                                    <label class="small fw-bold text-muted mb-1">Audio Device</label>
+                                    <select v-model="config.streams[activeStreamIndex].audio_device" class="form-select form-select-sm">
+                                        <option v-for="dev in config.audio_devices_list" :key="dev" :value="dev">{{ dev }}</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="small fw-bold text-muted mb-1">Codec</label>
+                                    <select v-model="config.streams[activeStreamIndex].format" class="form-select form-select-sm" @change="validateAudioSettings(activeStreamIndex)">
+                                        <option value="mp3">MP3</option>
+                                        <option value="aac_lc">AAC-LC</option>
+                                        <option value="he_aac">AAC+ (HE-AAC V1)</option>
+                                        <option value="he_aac_v2">eAAC+ (HE-AAC V2)</option>
+                                        <option value="opus">OGG Opus</option>
+                                        <option value="ogg">OGG Vorbis</option>
+                                        <option value="flac">FLAC</option>
+                                        <option value="wav">WAV</option>
+                                        <option value="mp2">MP2</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="small fw-bold text-muted mb-1">Bitrate</label>
+                                    <select v-if="config.streams[activeStreamIndex].format !== 'flac' && config.streams[activeStreamIndex].format !== 'wav'" 
+                                            v-model="config.streams[activeStreamIndex].bitrate" 
+                                            class="form-select form-select-sm">
+                                        <option v-for="b in currentBitrateOptions" :key="b.v" :value="b.v">{{ b.l }}</option>
+                                    </select>
+                                    <input v-else type="text" class="form-control form-control-sm" value="Lossless" disabled>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="small fw-bold text-muted mb-1">Sample Rate</label>
+                                    <select v-model="config.streams[activeStreamIndex].sample_rate" class="form-select form-select-sm">
+                                        <option v-for="sr in currentSampleRateOptions" :key="sr.v" :value="sr.v">{{ sr.l }}</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="small fw-bold text-muted mb-1">Bit Depth (Bits)</label>
+                                    <select v-model="config.streams[activeStreamIndex].bit_depth" class="form-select form-select-sm">
+                                        <option v-for="bd in currentBitDepthOptions" :key="bd.v" :value="bd.v">{{ bd.l }}</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-2">
+                                    <label class="small fw-bold text-muted mb-1">Stereo / Mono</label>
+                                    <select v-model="config.streams[activeStreamIndex].channels" class="form-select form-select-sm">
+                                        <option value="1">Mono</option><option value="2">Stereo</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="small fw-bold text-muted mb-1 d-flex align-items-center">
+                                        Gain (dB)
+                                        <span class="ms-1 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon" style="width: 14px; height: 14px; font-size: 0.6rem;" data-title='Allows you to increase or decrease the audio gain. &#10;&#10; To decrease the gain, use the negative sign &quot;-&quot; before the value (e.g. -2.0). &#10;&#10; To increase the gain, indicate the value without any sign (e.g. 3.0).'>i</span>
+                                    </label>
+                                    <input v-model="config.streams[activeStreamIndex].gain" type="number" class="form-control form-control-sm" placeholder="0">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="small fw-bold text-muted mb-1 d-flex align-items-center">
+                                        Audio Latency (Seconds)
+                                        <span class="ms-1 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon" style="width: 14px; height: 14px; font-size: 0.6rem;" data-title="Allows you to add a delay between the audio output and the encoding of the stream. &#10;&#10; This setting is useful if you want to force your stream to synchronize with another one.">i</span>
+                                    </label>
+                                    <input v-model="config.streams[activeStreamIndex].audio_delay" type="number" step="0.001" min="0" class="form-control form-control-sm" placeholder="Ex: 1.576">
+                                </div>
+                            </div>
+
+                            <h6 class="text-success border-bottom pb-2 mb-3 fw-bold">Stream Metadata (For Icecast and Internal Servers)</h6>
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-4"><label class="small fw-bold text-muted mb-1">Public Stream Name</label><input v-model="config.streams[activeStreamIndex].radio_name" class="form-control form-control-sm" placeholder="Example: My Stream"></div>
+                                <div class="col-md-5"><label class="small fw-bold text-muted mb-1">Public Stream Description</label><input v-model="config.streams[activeStreamIndex].description" class="form-control form-control-sm" placeholder="Your public stream description goes here"></div>
+                                <div class="col-md-3"><label class="small fw-bold text-muted mb-1">Genre</label><input v-model="config.streams[activeStreamIndex].genre" class="form-control form-control-sm" placeholder="Pop, Rock, ..."></div>
+                                <div class="col-md-12 mt-3">
+                                    <div class="bg-white border rounded p-3">
+                                        <label class="small fw-bold text-success mb-2">"Currently Playing" Metadata Source</label>
+                                        
+                                        <div v-if="['flac', 'opus'].includes(config.streams[activeStreamIndex].format)" class="alert alert-warning py-2 mb-0 small fw-bold">
+                                            ⚠️ "Currently Playing" metadata injection is not supported for FLAC and OGG Opus.
+                                        </div>
+                                        
+                                        <div v-else>
+                                            <select v-model="config.streams[activeStreamIndex].meta_source" class="form-select form-select-sm mb-3 border-success">
+                                                <option value="none">Disabled</option>
+                                                <option value="file">Local Text File</option>
+                                                <option value="http">HTTP/HTTPS URL</option>
+                                                <option value="post">POST function from automation software</option>
+                                            </select>
+
+                                            <div v-if="config.streams[activeStreamIndex].meta_source === 'file'" class="mb-3">
+                                                <label class="small text-muted mb-1">Local file path:</label>
+                                                <input v-model="config.streams[activeStreamIndex].meta_file_path" class="form-control form-control-sm" placeholder="Example: C:\NowPlaying.txt">
+                                            </div>
+
+                                            <div v-if="config.streams[activeStreamIndex].meta_source === 'http'" class="mb-3 p-3 bg-light rounded border">
+                                                <label class="small text-muted mb-1 fw-bold">URL to fetch metadata from:</label>
+                                                <input v-model="config.streams[activeStreamIndex].meta_http_url" class="form-control form-control-sm mb-3" placeholder="Example: https://www.myradiostation.com/current-song.php">
+                                                
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <label class="small text-muted mb-0 fw-bold">Update interval (seconds):</label>
+                                                    <input v-model="config.streams[activeStreamIndex].meta_http_interval" type="number" min="1" class="form-control form-control-sm w-auto" placeholder="7">
+                                                </div>
+                                            </div>
+
+                                            <div v-if="config.streams[activeStreamIndex].meta_source === 'post'" class="mb-3 p-3 bg-light rounded border">
+                                                <div class="row g-2 mb-2">
+                                                    <div class="col-md-6">
+                                                        <label class="small text-muted mb-1 fw-bold">Custom Stream ID:</label>
+                                                        <input v-model="config.streams[activeStreamIndex].meta_custom_id" class="form-control form-control-sm" placeholder="my_stream_id">
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="small text-muted mb-1 fw-bold">Security Key (key):</label>
+                                                        <input v-model="config.streams[activeStreamIndex].meta_post_key" class="form-control form-control-sm" placeholder="Optional key">
+                                                    </div>
+                                                </div>
+                                                <small class="text-muted d-block mt-2">Configure RadioDJ (Web Export) with these parameters:</small>
+                                                <div class="bg-dark text-white p-2 rounded small mt-1 border border-secondary">
+                                                    <div class="mb-1"><b class="text-info">URL:</b> http://{{ config.local_ip }}:{{ config.settings.web_port }}/api/metadata/{{ config.streams[activeStreamIndex].meta_custom_id }}</div>
+                                                    <div><b class="text-info">Custom Data:</b> key={{ config.streams[activeStreamIndex].meta_post_key || '[motdepasse]' }}&artist=$artist_enc$&title=$title_enc$</div>
+                                                </div>
+                                            </div>
+
+                                            <div v-if="config.streams[activeStreamIndex].meta_source !== 'none'" class="d-flex align-items-center gap-2">
+                                                <label class="small text-muted mb-0" style="white-space: nowrap;">Delay (in seconds) for sending metadata to the stream:</label>
+                                                <input v-model="config.streams[activeStreamIndex].meta_delay" type="number" min="0" class="form-control form-control-sm w-auto" placeholder="0">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h6 class="text-danger border-bottom pb-2 mb-3 fw-bold">Authentication & Destinations</h6>
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-2">
+                                    <label class="small fw-bold text-muted mb-1 d-flex align-items-center">
+                                        Mount Point
+                                        <span class="ms-2 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon" style="width: 15px; height: 15px; font-size: 0.65rem;" data-title="This setting is only required for broadcasting to an Icecast server. &#10;&#10; Be sure to include the / before your mount point name (e.g. /stream)">i</span>
+                                    </label>
+                                    <input v-model="config.streams[activeStreamIndex].mount" class="form-control form-control-sm" placeholder="/live">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="small fw-bold text-muted mb-1 d-flex align-items-center">
+                                        Source Username
+                                        <span class="ms-2 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon" style="width: 15px; height: 15px; font-size: 0.65rem;" data-title="This setting is only required for broadcasting to an Icecast server. &#10;&#10; Enter the &quot;source&quot; username configured on the Icecast server, which will authenticate the connection between the encoder and the streaming server.">i</span>
+                                    </label>
+                                    <input v-model="config.streams[activeStreamIndex].user" class="form-control form-control-sm" placeholder="source">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="small fw-bold text-muted mb-1 d-flex align-items-center">
+                                        Source Password
+                                        <span class="ms-2 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon" style="width: 15px; height: 15px; font-size: 0.65rem;" data-title="This setting is only required for broadcasting to an Icecast server. &#10;&#10; Enter the &quot;source&quot; password configured on the Icecast server, which will authenticate the connection between the encoder and the streaming server.">i</span>
+                                    </label>
+                                    <div class="input-group input-group-sm">
+                                        <input v-model="config.streams[activeStreamIndex].password" :type="showStreamPassword ? 'text' : 'password'" class="form-control">
+                                        <button class="btn btn-outline-secondary" type="button" @click="showStreamPassword = !showStreamPassword" title="Show/Hide password">
+                                            <!-- Open eye icon for the source password -->
+                                            <svg v-if="showStreamPassword" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                                <path d="M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
+                                                <path d="M0 8s3-5.5 8-5.5S16 8 16 8s-3 5.5-8 5.5S0 8 0 8zm8 3.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
+                                            </svg>
+                                            <!-- Closed eye icon for the source password -->
+                                            <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                                <path d="m10.79 12.912-1.614-1.615a3.5 3.5 0 0 1-4.474-4.474l-2.06-2.06C.938 6.278 0 8 0 8s3 5.5 8 5.5a7.029 7.029 0 0 0 2.79-.588zM5.21 3.088A7.028 7.028 0 0 1 8 2.5c5 0 8 5.5 8 5.5s-.939 1.721-2.641 3.238l-2.062-2.062a3.5 3.5 0 0 0-4.474-4.474L5.21 3.089z"/>
+                                                <path d="M5.525 7.646 6.647 8.768A1.5 1.5 0 0 1 6.03 9.602l-1.083-1.083a3.506 3.506 0 0 1 .578-1.22zM9.412 9.412l1.105 1.105c-.367.225-.794.347-1.233.347a1.5 1.5 0 0 1-1.233-2.452l1.105-1.105z"/>
+                                                <path d="M0 1 1 0l15 15-1 1L0 1z"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="small fw-bold text-dark mb-2">Broadcast this stream to the following server(s):</label>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <div v-for="srv in config.servers">
+                                            <input type="checkbox" class="btn-check" :id="'srv_'+config.streams[activeStreamIndex].id+'_'+srv.id" :value="srv.id" v-model="config.streams[activeStreamIndex].targets" autocomplete="off">
+                                            <label class="btn btn-outline-primary btn-sm rounded-pill px-3 py-1" :for="'srv_'+config.streams[activeStreamIndex].id+'_'+srv.id">🌐 {{ srv.name }}</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h6 class="border-bottom pb-2 mb-3 fw-bold d-flex align-items-center" style="color: #c78100;">
+                                Silence & Connection Alerts
+                                <span class="ms-2 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon" style="width: 15px; height: 15px; font-size: 0.65rem;" data-title="Alert emails are sent via the SMTP service. &#10;&#10; Make sure you have configured this service correctly with the required information so that this feature works properly.">i</span>
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-12">
+                                    <div class="bg-white border rounded p-3 mb-3">
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" v-model="config.streams[activeStreamIndex].alert_silent" :id="'silence_'+config.streams[activeStreamIndex].id">
+                                            <label class="form-check-label fw-bold text-dark" :for="'silence_'+config.streams[activeStreamIndex].id">Send an email alert if the stream is silent</label>
+                                        </div>
+                                        <div class="row g-2 mt-2 pt-2 border-top" v-show="config.streams[activeStreamIndex].alert_silent">
+                                            <div class="col-md-3">
+                                                <label class="small text-muted mb-1 d-flex align-items-center">
+                                                    Loss Threshold (dB)
+                                                    <span class="ms-1 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon" style="width: 14px; height: 14px; font-size: 0.6rem;" data-title="When the audio level is below this value, the stream is considered silent.">i</span>
+                                                </label>
+                                                <input v-model="config.streams[activeStreamIndex].loss_threshold_db" type="number" step="0.1" class="form-control form-control-sm">
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="small text-muted mb-1 d-flex align-items-center">
+                                                    Loss Timeout (seconds)
+                                                    <span class="ms-1 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon" style="width: 14px; height: 14px; font-size: 0.6rem;" data-title="Number of seconds before confirming that the stream is silent, which will trigger the sending of an alert email.">i</span>
+                                                </label>
+                                                <input v-model="config.streams[activeStreamIndex].loss_timeout_sec" type="number" class="form-control form-control-sm">
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="small text-muted mb-1 d-flex align-items-center">
+                                                    Recovery Threshold (dB)
+                                                    <span class="ms-1 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon" style="width: 14px; height: 14px; font-size: 0.6rem;" data-title="When the audio level is above this value, the stream is considered to be functional again.">i</span>
+                                                </label>
+                                                <input v-model="config.streams[activeStreamIndex].recovery_threshold_db" type="number" step="0.1" class="form-control form-control-sm">
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="small text-muted mb-1 d-flex align-items-center">
+                                                    Recovery Timeout (seconds)
+                                                    <span class="ms-1 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon" style="width: 14px; height: 14px; font-size: 0.6rem;" data-title="Number of seconds before confirming that the stream is functional again, which will trigger the sending of an email notifying of the restoration.">i</span>
+                                                </label>
+                                                <input v-model="config.streams[activeStreamIndex].recovery_timeout_sec" type="number" class="form-control form-control-sm">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-white border rounded p-3">
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" v-model="config.streams[activeStreamIndex].alert_unreachable" :id="'unreach_'+config.streams[activeStreamIndex].id">
+                                            <label class="form-check-label fw-bold text-dark" :for="'unreach_'+config.streams[activeStreamIndex].id">Send an email alert if one of the selected streaming servers is unreachable (Connection lost)</label>
+                                        </div>
+                                        <div class="row g-2 mt-2 pt-2 border-top" v-show="config.streams[activeStreamIndex].alert_unreachable">
+                                            <div class="col-md-4">
+                                                <label class="small text-muted mb-1 d-flex align-items-center">
+                                                    Timeout before alert (seconds)
+                                                    <span class="ms-1 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon" style="width: 14px; height: 14px; font-size: 0.6rem;" data-title="Number of seconds to wait before sending an alert email. &#10;&#10; If the connection to the streaming server is restored before the specified number of seconds has elapsed, the alert email will not be sent.">i</span>
+                                                </label>
+                                                <input v-model="config.streams[activeStreamIndex].unreachable_timeout_sec" type="number" class="form-control form-control-sm">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GENERAL SETTINGS TAB -->
+                <div v-if="tab=='settings'">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <!-- Global Preferences section -->
+                            <div class="settings-card shadow-sm border-0 mb-3">
+                                <div class="settings-header">
+                                    <h5 class="mb-0 text-primary fw-bold">Global Preferences</h5>
+                                </div>
+                                <div class="settings-body">
+                                    <div class="mb-4 border-bottom pb-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-3 bg-light p-2 rounded border">
+                                            <span class="fw-bold text-dark">Fraunhofer FDK library for AAC encoding:</span>
+                                            <span v-if="fdk_installed" class="badge bg-success fs-6 shadow-sm">DETECTED</span>
+                                            <span v-if="!fdk_installed" class="badge bg-danger fs-6 shadow-sm" style="cursor: pointer;" @click="show_fdk_modal = true" title="Click here for more details, and to install the library">Missing</span>
+                                        </div> 
+                                        <label class="form-label text-muted fw-bold mb-1 text-primary">Instance Name (Optional)</label>
+                                        <input v-model="config.settings.instance_name" type="text" class="form-control" placeholder="Example: My Encoder">
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="checkbox" v-model="config.settings.hide_instance_on_login" id="hide_inst">
+                                            <label class="form-check-label text-muted small fw-bold" for="hide_inst">Hide instance name on Login page</label>
+                                        </div>
+                                    </div>
+                                    <div class="mb-4 border-bottom pb-3">
+                                        <label class="form-label text-muted fw-bold mb-1">Interface Theme</label>
+                                        <select v-model="config.settings.dark_mode" class="form-select">
+                                            <option :value="false">Light Mode</option>
+                                            <option :value="true">Dark Mode</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label text-muted fw-bold mb-1">Admin Password (Webserver Login)</label>
+                                        <div class="input-group">
+                                            <input v-model="config.password" :type="showAdminPassword ? 'text' : 'password'" class="form-control">
+                                            <button class="btn btn-outline-secondary" type="button" @click="showAdminPassword = !showAdminPassword" title="Show/Hide password">
+                                                <!-- Open eye icon for the admin password -->
+                                                <svg v-if="showAdminPassword" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                                    <path d="M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
+                                                    <path d="M0 8s3-5.5 8-5.5S16 8 16 8s-3 5.5-8 5.5S0 8 0 8zm8 3.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
+                                                </svg>
+                                                <!-- Closed eye icon for the admin password -->
+                                                <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                                    <path d="m10.79 12.912-1.614-1.615a3.5 3.5 0 0 1-4.474-4.474l-2.06-2.06C.938 6.278 0 8 0 8s3 5.5 8 5.5a7.029 7.029 0 0 0 2.79-.588zM5.21 3.088A7.028 7.028 0 0 1 8 2.5c5 0 8 5.5 8 5.5s-.939 1.721-2.641 3.238l-2.062-2.062a3.5 3.5 0 0 0-4.474-4.474L5.21 3.089z"/>
+                                                    <path d="M5.525 7.646 6.647 8.768A1.5 1.5 0 0 1 6.03 9.602l-1.083-1.083a3.506 3.506 0 0 1 .578-1.22zM9.412 9.412l1.105 1.105c-.367.225-.794.347-1.233.347a1.5 1.5 0 0 1-1.233-2.452l1.105-1.105z"/>
+                                                    <path d="M0 1 1 0l15 15-1 1L0 1z"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label text-muted fw-bold mb-1">Webserver Port<small class="text-danger fw-bold ms-1">(Will trigger an automatic server restart if modified)</small></label>
+                                        <input v-model="config.settings.web_port" type="number" class="form-control">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label text-muted fw-bold mb-1 d-flex align-items-center">
+                                            Automatic reconnection timeout to streaming servers (in seconds)
+                                            <span class="ms-2 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon tooltip-left" style="width: 15px; height: 15px; font-size: 0.65rem;" data-title="If the connection to the streaming server is lost, the encoder will wait for the specified number of seconds before attempting to reconnect. &#10;&#10; Attempts to reconnect will be carried out until the connection is restored.">i</span>
+                                        </label>
+                                        <input v-model="config.settings.reconnect_delay" type="number" class="form-control">
+                                    </div>
+                                    <div class="mt-4 pt-3 border-top">
+                                        <div class="form-check form-switch mb-0 d-flex align-items-center">
+                                            <input class="form-check-input" type="checkbox" v-model="config.settings.enable_monitoring" id="mon_switch">
+                                            <label class="form-check-label fw-bold text-dark ms-2" for="mon_switch">Enable CPU/RAM Monitoring</label>
+                                            <span class="ms-2 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon tooltip-left" style="width: 15px; height: 15px; font-size: 0.65rem;" data-title="When enabled, this feature allows you to monitor the host computer's CPU and RAM usage in real time via an indicator located in the upper-right corner of the interface. &#10;&#10; The values are updated every 10 seconds.">i</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <!-- System Actions -->
+                            <div class="settings-card shadow-sm border-0 mb-3">
+                                <div class="settings-header bg-light">
+                                    <h5 class="mb-0 text-danger fw-bold">System Management</h5>
+                                </div>
+                                <div class="settings-body">
+                                    <button type="button" class="btn btn-outline-dark w-100 mb-4 py-2 fw-bold shadow-sm" onclick="openLogs()">View System and Authentication Logs</button>
+                                    
+                                    <div class="row g-3 mb-4">
+                                        <div class="col-6"><button type="button" class="btn btn-outline-success w-100 py-2" onclick="exportConfig()">Export Configuration</button></div>
+                                        <div class="col-6">
+                                            <button type="button" class="btn btn-outline-primary w-100 py-2" onclick="document.getElementById('import-file').click()">Import Configuration</button>
+                                            <input type="file" id="import-file" style="display:none" accept=".json" onchange="importConfig(event)">
+                                        </div>
+                                    </div>
+                                    <div class="row g-3 mb-1">
+                                        <div class="col-6"><button type="button" class="btn btn-outline-danger w-100 py-2 fw-bold" onclick="restartSystem()">Restart</button></div>
+                                        <div class="col-6"><button type="button" class="btn btn-danger w-100 py-2 fw-bold" onclick="factoryReset()">Factory Reset</button></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mt-4 mb-5">
+                        <button type="button" class="btn btn-success px-5 py-2 fw-bold shadow-sm" @click="saveConfig()">Save Configuration</button>
+                    </div>
+                </div>
+
+                <!-- SMTP SETTINGS TAB -->
+                <div v-if="tab=='smtp'">
+                    <div class="row justify-content-center">
+                        <div class="col-md-10">
+                            <div class="settings-card shadow-sm border-primary mb-4 overflow-hidden">
+                                <div class="settings-header text-center py-3 bg-white border-bottom">
+                                    <h4 class="mb-2 text-primary fw-bold">SMTP Configuration</h4>
+                                    <p class="text-muted mb-0 small">Configure this service if you want to receive email alerts in the event of silent streams or unreachable streaming servers.</p>
+                                </div>
+                                
+                                <div class="settings-body bg-light text-center border-bottom py-3">
+                                    <div class="form-check form-switch d-inline-flex align-items-center mb-0">
+                                        <input class="form-check-input mt-0 me-3" type="checkbox" id="smtp_enabled" v-model="config.settings.smtp.enabled" style="width: 3em; height: 1.5em; cursor: pointer;">
+                                        <label class="form-check-label fw-bold text-dark fs-5" for="smtp_enabled" style="cursor: pointer; padding-top: 3px;">Enable SMTP Service</label>
+                                    </div>
+                                </div>
+                                
+                                <div class="settings-body">
+                                    <div class="row g-4">
+                                        <div class="col-md-6 border-end pe-md-4">
+                                            <h6 class="text-center bg-light border p-2 rounded mb-4 fw-bold text-secondary">Sender Account Configuration</h6>
+                                            
+                                            <div class="mb-3">
+                                                <label class="small text-muted fw-bold mb-1">SMTP Host</label>
+                                                <input v-model="config.settings.smtp.server" class="form-control" placeholder="Example: smtp.myradiostation.com">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="small text-muted fw-bold mb-1">SMTP Port</label>
+                                                <input v-model="config.settings.smtp.port" type="number" class="form-control" placeholder="587">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="small text-muted fw-bold mb-1">SMTP Username</label>
+                                                <input v-model="config.settings.smtp.user" class="form-control">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="small text-muted fw-bold mb-1">SMTP Password</label>
+                                                <input v-model="config.settings.smtp.pass" type="password" class="form-control">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="small text-muted fw-bold mb-1">Sender Email</label>
+                                                <input v-model="config.settings.smtp.sender" class="form-control" placeholder="Example: alerts@myradiostation.com">
+                                            </div>
+                                            <div class="form-check mb-4 bg-light p-2 rounded border">
+                                                <input class="form-check-input ms-1 me-2" type="checkbox" v-model="config.settings.smtp.tls" id="tls_check">
+                                                <label class="form-check-label fw-bold text-dark" for="tls_check">Use TLS Protocol</label>
+                                            </div>
+                                            
+                                            <hr class="text-muted mb-4">
+                                            
+                                            <div class="mb-3">
+                                                <label class="small fw-bold text-dark mb-1">Interval between alert emails (minutes):</label>
+                                                <input v-model="config.settings.smtp.spam_delay" type="number" class="form-control bg-light">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-6 ps-md-4">
+                                            <h6 class="text-center bg-light border p-2 rounded mb-4 fw-bold text-secondary">Recipients</h6>
+                                            <div class="mb-3">
+                                                <label class="small text-muted fw-bold mb-1">Email 1</label>
+                                                <input v-model="config.settings.smtp.recipients[0]" class="form-control" placeholder="Example: engineer@myradiostation.com">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="small text-muted fw-bold mb-1">Email 2</label>
+                                                <input v-model="config.settings.smtp.recipients[1]" class="form-control">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="small text-muted fw-bold mb-1">Email 3</label>
+                                                <input v-model="config.settings.smtp.recipients[2]" class="form-control">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="small text-muted fw-bold mb-1">Email 4</label>
+                                                <input v-model="config.settings.smtp.recipients[3]" class="form-control">
+                                            </div>
+                                            
+                                            <div class="mt-5 p-3 bg-light border rounded text-center shadow-sm">
+                                                <button type="button" class="btn btn-success fw-bold w-100 mb-2" onclick="testSMTP()">Send Test Email</button>
+                                                <small class="text-muted d-block">Please save your configuration before testing!</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Form footer -->
+                                <div class="bg-light border-top text-center" style="padding: 1px 0 !important;">
+                                    <button class="btn btn-primary px-5 py-2 fw-bold shadow-sm" style="margin: 0 !important; transform: translateY(20px);" @click="saveConfig()">Save Configuration</button>
+                                </div>
+                            
+                            <div class="mb-5"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            </form>
+
+        </div>
+
+        <!-- MODAL LOGS -->
+        <div id="logs-modal" class="modal">
+            <div class="modal-box text-start" style="width: 850px; max-width: 95%;">
+                <h3 class="text-center text-primary mb-4 fw-bold">System and Authentication Logs</h3>
+                <div class="d-flex gap-2 mb-3">
+                    <select id="log-filter" class="form-select w-auto shadow-sm" onchange="currentLogPage=1; loadLogs()">
+                        <option value="ALL">All Events</option>
+                        <option value="INFO">Info</option>
+                        <option value="WARNING">Warnings</option>
+                        <option value="ERROR">Errors</option>
+                        <option value="SYSTEM">System</option>
+                        <option value="AUTH">Auth</option>
+                    </select>
+                    <button class="btn btn-secondary shadow-sm" onclick="loadLogs()">Refresh</button>
+                    <a href="/api/logs/export" target="_blank" class="btn btn-secondary shadow-sm">Export all events to text file</a>
+                    <button class="btn btn-danger ms-auto shadow-sm" onclick="clearLogs()">Clear</button>
+                </div>
+                <div style="height: 400px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px; background: white;">
+                    <table class="logs-table">
+                        <thead style="position: sticky; top: 0; z-index: 1; background: #e9ecef; box-shadow: 0 2px 2px rgba(0,0,0,0.1);">
+                            <tr><th style="width: 160px;">Timestamp</th><th style="width: 100px;">Type</th><th>Event</th></tr>
+                        </thead>
+                        <tbody id="logs-body"></tbody>
+                    </table>
+                </div>
+                <div class="d-flex justify-content-end align-items-center mt-3 gap-2">
+                    <button class="btn btn-sm btn-outline-dark" onclick="changeLogPage(-1)" id="prev-page-btn">&lt;</button>
+                    <span id="log-page-info" class="fw-bold">Page 1 / 1</span>
+                    <button class="btn btn-sm btn-outline-dark" onclick="changeLogPage(1)" id="next-page-btn">&gt;</button>
+                </div>
+                <button type="button" class="btn btn-secondary w-100 mt-4 fw-bold py-2" onclick="document.getElementById('logs-modal').style.display='none'">Close</button>
+            </div>
+        </div>
+
+        <script>
+        var currentLogPage = 1;
+
+        function openLogs() {
+            document.getElementById('logs-modal').style.display='flex';
+            currentLogPage = 1;
+            loadLogs();
+        }
+
+        function changeLogPage(delta) {
+            currentLogPage += delta;
+            loadLogs();
+        }
+
+        function loadLogs() {
+            let filter = document.getElementById('log-filter').value;
+            fetch(`/api/logs?page=${currentLogPage}&filter=${filter}`).then(r => r.json()).then(data => {
+                let tbody = document.getElementById('logs-body');
+                tbody.innerHTML = "";
+                data.logs.forEach(log => {
+                    let tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${log.timestamp}</td><td class="log-${log.level}">${log.level}</td><td class="event-text"></td>`;
+                    tr.querySelector('.event-text').textContent = log.event;
+                    tbody.appendChild(tr);
+                });
+                document.getElementById('log-page-info').innerText = `Page ${data.page} / ${data.total_pages}`;
+                document.getElementById('prev-page-btn').disabled = (data.page <= 1);
+                document.getElementById('next-page-btn').disabled = (data.page >= data.total_pages);
+                currentLogPage = data.page;
+            });
+        }
+
+        function clearLogs() {
+            if(!confirm("Are you sure you want to clear all logs?")) return;
+            fetch('/api/logs/clear', { method: 'POST' }).then(() => loadLogs());
+        }
+
+        function testSMTP() {
+            fetch('/api/smtp/test', {method: 'POST'}).then(r => r.json()).then(d => alert(d.message));
+        }
+
+        function restartSystem() {
+            if(confirm("Are you sure you want to restart the encoder?\n\nThis will interrupt all your streams if they are being encoded!")) {
+                window.location.href = '/api/sys/restart';
+            }
+        }
+
+        function factoryReset() {
+            if(confirm("Are you sure you want to RESTORE the encoder to factory settings?\n\nThis operation will DELETE your current configuration and cannot be undone!")) {
+                window.location.href = '/api/sys/reset';
+            }
+        }
+
+        function exportConfig() {
+            window.location.href = "/api/sys/export";
+        }
+
+        function importConfig(event) {
+            let file = event.target.files[0];
+            if(!file) return;
+            let formData = new FormData();
+            formData.append("config_file", file);
+            fetch('/api/sys/import', {method: 'POST', body: formData})
+            .then(r => r.json())
+            .then(data => {
+                if(data.status === 'ok') {
+                    document.body.innerHTML = `
+                        <style>
+                            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding-top: 100px; background: #f4f7f6; color: #333; height: 100vh; margin: 0; }
+                            .restart-card { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: inline-block; min-width: 400px; }
+                            h2 { color: #0d6efd; margin-top: 0; font-weight: bold; font-size: 1.5rem; }
+                            .loader { border: 4px solid #f3f3f3; border-top: 4px solid #0d6efd; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+                            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                        </style>
+                        <div class="restart-card">
+                            <div class="loader"></div>
+                            <h2>Configuration imported successfully!</h2>
+                            <p>The encoder is restarting... You will be redirected in 5 seconds.</p>
+                        </div>`;
+                    setTimeout(() => {
+                        window.location.href = window.location.protocol + '//' + window.location.hostname + ':' + data.new_port + '/';
+                    }, 5000);
+                } else {
+                    alert("Error: " + data.message);
+                }
+            });
+        }
+
+        const app = Vue.createApp({
+            data() {
+                return {
+                    toast: { show: false, message: '' },
+                    tab: 'dashboard',
+                    activeStreamIndex: 0,
+                    showStreamPassword: false, 
+                    showAdminPassword: false,
+                    draggedStreamIndex: null,
+                    lastSwapTime: 0,
+                    draggedServerIndex: null,
+                    lastServerSwapTime: 0,
+                    config: { servers: [], streams: [], settings: {smtp:{recipients:["","","",""]}}, audio_devices_list: [] },
+                    originalStreamsJson: '[]',
+                    originalServersJson: '[]', 
+                    originalSettingsJson: '{}',
+                    originalPasswordJson: '',
+                    statusData: [],
+                    sys_cpu: 0,
+                    sys_ram: 0,
+                    sys_uptime: 0,
+                    sysStartTime: 0,
+                    socket: null,
+                    fdk_installed: false,
+                    fdk_downloading: false,
+                    show_fdk_modal: false,
+                    targetVUs: {}, 
+                    displayVUs: {}
+                };
+            },
+            computed: {
+                savedEnableMonitoring() {
+                    if (!this.originalSettingsJson) return false;
+                    try {
+                        const settings = JSON.parse(this.originalSettingsJson);
+                        return settings.enable_monitoring === true;
+                    } catch(e) { return false; }
+                },
+                currentBitrateOptions() {
+                    if (!this.config.streams || this.config.streams.length === 0 || !this.config.streams[this.activeStreamIndex]) return [];
+                    const fmt = this.config.streams[this.activeStreamIndex].format;
+                    let vals = [];
+                    
+                    if (fmt === 'mp3') vals = [8,16,24,32,40,48,56,64,80,96,112,128,144,160,192,224,256,320];
+                    else if (fmt === 'mp2') vals = [8,16,24,32,40,48,56,64,80,96,112,128,160,192,224,256,320,384];
+                    else if (fmt === 'aac_lc') vals = [16,24,32,40,48,56,64,80,96,112,128,144,160,192,224,256,320,384,448,512,576];
+                    else if (fmt === 'he_aac') vals = [16,24,32,40,48,56,64,80,96,112,128];
+                    else if (fmt === 'he_aac_v2') vals = [8,16,24,32,40,48,56];
+                    else if (fmt === 'opus') vals = [6,8,16,24,32,40,48,56,64,80,96,112,128,160,192,224,256,320,384,448,510];
+                    else if (fmt === 'ogg') vals = [45,64,80,96,112,128,144,160,192,224,256,320,384,448,500];
+                    else vals = [128];
+                    
+                    return vals.map(v => ({ v: v+'k', l: v+' Kbps' }));
+                },
+                currentSampleRateOptions() {
+                    if (!this.config.streams || this.config.streams.length === 0 || !this.config.streams[this.activeStreamIndex]) return [];
+                    const fmt = this.config.streams[this.activeStreamIndex].format;
+                    let vals = [];
+                    
+                    if (fmt === 'mp3') vals = [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000];
+                    else if (fmt === 'mp2') vals = [16000, 22050, 24000, 32000, 44100, 48000];
+                    else if (fmt === 'aac_lc') vals = [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 64000, 88200, 96000];
+                    else if (fmt === 'he_aac' || fmt === 'he_aac_v2') vals = [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000];
+                    else if (fmt === 'opus') vals = [8000, 12000, 16000, 24000, 48000];
+                    else vals = [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 88200, 96000, 192000]; // Pour OGG Vorbis, FLAC et WAV
+                    
+                    return vals.map(v => ({ v: v.toString(), l: (v / 1000) + ' kHz' }));
+                },
+                currentBitDepthOptions() {
+                    if (!this.config.streams || this.config.streams.length === 0 || !this.config.streams[this.activeStreamIndex]) return [];
+                    const fmt = this.config.streams[this.activeStreamIndex].format;
+                    let vals = [];
+                    
+                    if (fmt === 'wav') vals = [{v: '16', l: '16-bit'}, {v: '24', l: '24-bit'}, {v: '32', l: '32-bit'}];
+                    else if (fmt === 'flac') vals = [{v: '16', l: '16-bit'}, {v: '24', l: '24-bit'}];
+                    else vals = [{v: '0', l: 'Auto (32-bit Float)'}, {v: '16', l: '16-bit (Truncated)'}];
+                    
+                    return vals;
+                },
+                unsavedStreams() {
+                    if (!this.config || !this.config.streams) return [];
+                    try {
+                        const orig = JSON.parse(this.originalStreamsJson);
+                        return this.config.streams.filter(s => {
+                            const origStream = orig.find(o => o.id === s.id);
+                            if (!origStream) return true;
+                            return JSON.stringify(s) !== JSON.stringify(origStream);
+                        }).map(s => s.id);
+                    } catch(e) { return []; }
+                },
+                unsavedServers() {
+                    if (!this.config || !this.config.servers) return [];
+                    try {
+                        const orig = JSON.parse(this.originalServersJson);
+                        return this.config.servers.filter(s => {
+                            const origSrv = orig.find(o => o.id === s.id);
+                            if (!origSrv) return true;
+                            return JSON.stringify(s) !== JSON.stringify(origSrv);
+                        }).map(s => s.id);
+                    } catch(e) { return []; }
+                },
+                hasUnsavedChanges() {
+                    return this.unsavedStreams.length > 0 || this.unsavedServers.length > 0 || this.hasUnsavedSettings;
+                },
+                hasUnsavedSettings() {
+                    if (!this.config || !this.config.settings) return false;
+                    const currentSettings = JSON.stringify(this.config.settings);
+                    const currentPassword = JSON.stringify(this.config.password);
+                    return currentSettings !== this.originalSettingsJson || currentPassword !== this.originalPasswordJson;
+                }
+            },
+            mounted() {
+                window.addEventListener('beforeunload', (e) => {
+                    if (this.hasUnsavedChanges) {
+                        e.preventDefault();
+                        e.returnValue = '';
+                    }
+                });
+
+                this.loadConfig();
+                
+                setInterval(() => { 
+                    if(this.savedEnableMonitoring) this.fetchStats(); 
+                }, 10000);
+
+                setInterval(() => {
+                    if (this.sysStartTime > 0) {
+                        let upSec = Math.floor(Date.now() / 1000) - this.sysStartTime;
+                        let upEl = document.getElementById('navbar-uptime');
+                        if (upEl) upEl.innerText = 'Uptime: ' + this.formatSysUptime(upSec);
+                    }
+                }, 1000);
+
+                const scalePoints = [0, -3, -6, -10, -15, -20, -25, -30, -40, -50, -60];
+                const percentPoints = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0];
+
+                const dbToPercent = (db) => {
+                    if (db >= scalePoints[0]) return 100;
+                    if (db <= scalePoints[scalePoints.length - 1]) return 0;
+                    for (let i = 0; i < scalePoints.length - 1; i++) {
+                        if (db <= scalePoints[i] && db > scalePoints[i+1]) {
+                            let rangeDB = scalePoints[i] - scalePoints[i+1];
+                            let rangePct = percentPoints[i] - percentPoints[i+1];
+                            let diff = db - scalePoints[i+1]; 
+                            return percentPoints[i+1] + (diff / rangeDB * rangePct);
+                        }
+                    }
+                    return 0;
+                };
+
+                const socket = io();
+                let lastStatusUpdate = 0;
+
+                socket.on('status_all_update', (data) => {
+                    data.forEach(stream => {
+                        const id = stream.id;
+                        const bL = document.getElementById('bar-l-' + id);
+                        const bR = document.getElementById('bar-r-' + id);
+                        const tL = document.getElementById('txt-l-' + id);
+                        const tR = document.getElementById('txt-r-' + id);
+
+                        if (stream.vu) {
+                            if (bL) {
+                                bL.style.width = dbToPercent(stream.vu.l) + '%';
+                                tL.innerText = 'L: ' + (stream.vu.l > -59.9 ? stream.vu.l.toFixed(1) : '-60.0') + ' dB';
+                            }
+                            if (bR) {
+                                bR.style.width = dbToPercent(stream.vu.r) + '%';
+                                tR.innerText = 'R: ' + (stream.vu.r > -59.9 ? stream.vu.r.toFixed(1) : '-60.0') + ' dB';
+                            }
+                        }
+                    });
+
+                    let now = Date.now();
+                    if (now - lastStatusUpdate >= 1000) {
+                        if (this.tab === 'dashboard') {
+                            this.statusData = data;
+                        }
+                        lastStatusUpdate = now;
+                    }
+                });
+            },
+            methods: {
+                applyTheme() {
+                    if (this.config.settings && this.config.settings.dark_mode) {
+                        document.body.classList.add('dark-mode');
+                    } else {
+                        document.body.classList.remove('dark-mode');
+                    }
+                },
+                showNotification(msg) {
+                    this.toast.message = msg;
+                    this.toast.show = true;
+                    setTimeout(() => { this.toast.show = false; }, 5000);
+                },
+                validateAudioSettings(index) {
+                    const stream = this.config.streams[index];
+                    const fmt = stream.format;
+                    
+                    // 1. Bitrate Validation (Skipped for FLAC/WAV)
+                    if (fmt !== 'flac' && fmt !== 'wav') {
+                        let bVals = [];
+                        if (fmt === 'mp3') bVals = [8,16,24,32,40,48,56,64,80,96,112,128,144,160,192,224,256,320];
+                        else if (fmt === 'mp2') bVals = [8,16,24,32,40,48,56,64,80,96,112,128,160,192,224,256,320,384];
+                        else if (fmt === 'aac_lc') bVals = [16,24,32,40,48,56,64,80,96,112,128,144,160,192,224,256,320,384,448,512,576];
+                        else if (fmt === 'he_aac') bVals = [16,24,32,40,48,56,64,80,96,112,128];
+                        else if (fmt === 'he_aac_v2') bVals = [8,16,24,32,40,48,56];
+                        else if (fmt === 'opus') bVals = [6,8,16,24,32,40,48,56,64,80,96,112,128,160,192,224,256,320,384,448,510];
+                        else if (fmt === 'ogg') bVals = [45,64,80,96,112,128,144,160,192,224,256,320,384,448,500];
+                        
+                        let currentB = parseInt(stream.bitrate.replace('k', ''));
+                        if (!bVals.includes(currentB)) {
+                            if (currentB >= Math.max(...bVals)) stream.bitrate = Math.max(...bVals) + 'k';
+                            else if (currentB <= Math.min(...bVals)) stream.bitrate = Math.min(...bVals) + 'k';
+                            else stream.bitrate = '128k'; 
+                        }
+                    }
+
+                    // 2. Sample Rate Validation (Applies to ALL codecs)
+                    let srVals = [];
+                    if (fmt === 'mp3') srVals = [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000];
+                    else if (fmt === 'mp2') srVals = [16000, 22050, 24000, 32000, 44100, 48000];
+                    else if (fmt === 'aac_lc') srVals = [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 64000, 88200, 96000];
+                    else if (fmt === 'he_aac' || fmt === 'he_aac_v2') srVals = [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000];
+                    else if (fmt === 'opus') srVals = [8000, 12000, 16000, 24000, 48000];
+                    else srVals = [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 88200, 96000, 192000];
+                    
+                    let currentSR = parseInt(stream.sample_rate);
+                    if (!srVals.includes(currentSR)) {
+                        if (currentSR >= Math.max(...srVals)) stream.sample_rate = Math.max(...srVals).toString();
+                        else if (currentSR <= Math.min(...srVals)) stream.sample_rate = Math.min(...srVals).toString();
+                        else stream.sample_rate = '48000'; // Default safe-haven value
+                    }
+
+                    // 3. Bit Depth Validation
+                    let bdVals = [];
+                    if (fmt === 'wav') bdVals = ['16', '24', '32'];
+                    else if (fmt === 'flac') bdVals = ['16', '24'];
+                    else bdVals = ['0', '16'];
+                    
+                    if (fmt === 'wav') stream.bit_depth = '32';
+                    else if (fmt === 'flac') stream.bit_depth = '24';
+                    else stream.bit_depth = '0';
+                },
+                loadConfig() {
+                    fetch('/api/config').then(r => r.json()).then(data => {
+                        this.config = data;
+                        this.originalStreamsJson = JSON.stringify(data.streams || []);
+                        this.originalServersJson = JSON.stringify(data.servers || []);
+                        this.originalSettingsJson = JSON.stringify(data.settings || {});
+                        this.originalPasswordJson = JSON.stringify(data.password || '');
+                        this.fdk_installed = data.fdk_installed;
+                        this.sysStartTime = data.system_start_time || 0;
+                        this.applyTheme();
+                    });
+                },
+               saveConfig(silent = false) {
+                    const form = document.getElementById('main-form');
+                    if (form && !form.checkValidity()) {
+                        form.classList.add('was-validated');
+                        if (!silent) alert("Please correct the invalid fields highlighted in red before saving.");
+                        return;
+                    }
+                    
+                    // Make sure at least one destination has been selected 
+                    for (let i = 0; i < this.config.streams.length; i++) {
+                        let stream = this.config.streams[i];
+                        if (!stream.targets || stream.targets.length === 0) {
+                            if (!silent) alert(`⚠️ Missing Destination!\n\nNo destination is selected for the stream:\n"${stream.name}"\n\nPlease select at least one server destination before saving.`);
+                            // Automatically switches to the tab for the problematic feed to assist the user
+                            this.tab = 'streams';
+                            this.activeStreamIndex = i;
+                            return; // Refuse to save the configuration
+                        }
+                    }
+
+                    // Warning message display if the settings of a currently-encoded stream were modified
+                    let requiresInterruptionWarning = false;
+
+                    // 1. Check if one of the modified streams is currently running
+                    for (let streamId of this.unsavedStreams) {
+                        if (this.getStatus(streamId).running) {
+                            requiresInterruptionWarning = true;
+                            break;
+                        }
+                    }
+
+                    // 2. Check if one of the modified servers is currently used for encoding
+                    if (!requiresInterruptionWarning) {
+                        for (let serverId of this.unsavedServers) {
+                            let affectedStreams = this.config.streams.filter(s => s.targets && s.targets.includes(serverId));
+                            for (let s of affectedStreams) {
+                                if (this.getStatus(s.id).running) {
+                                    requiresInterruptionWarning = true;
+                                    break;
+                                }
+                            }
+                            if (requiresInterruptionWarning) break;
+                        }
+                    }
+
+                    if (requiresInterruptionWarning) {
+                        let msg = "⚠️ You have modified the configuration of one or more RUNNING streams / servers.\n\nSaving these changes will temporarily interrupt the encoding of the affected stream(s) or server(s).\n\nClick \"OK\" to continue, or \"Cancel\".";
+                        if (!confirm(msg)) {
+                            return; // If the user cancels the configuration save
+                        }
+                    }
+
+                    fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.config) })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === "restarting") {
+                            document.body.innerHTML = `
+                                <style>
+                                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding-top: 100px; background: #f4f7f6; color: #333; height: 100vh; margin: 0; }
+                                    .restart-card { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: inline-block; min-width: 400px; }
+                                    h2 { color: #0d6efd; margin-top: 0; font-weight: bold; font-size: 1.5rem; }
+                                    .loader { border: 4px solid #f3f3f3; border-top: 4px solid #0d6efd; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+                                    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                                </style>
+                                <div class="restart-card">
+                                    <div class="loader"></div>
+                                    <h2>Port modified!</h2>
+                                    <p>The encoder is restarting on port ${data.new_port}. You will be redirected in 5 seconds.</p>
+                                </div>`;
+                            setTimeout(() => {
+                                window.location.href = window.location.protocol + '//' + window.location.hostname + ':' + data.new_port + '/';
+                            }, 5000);
+                        } else {
+                            if (form) form.classList.remove('was-validated');
+                            this.originalStreamsJson = JSON.stringify(this.config.streams || []);
+                            this.originalServersJson = JSON.stringify(this.config.servers || []);
+                            this.originalSettingsJson = JSON.stringify(this.config.settings || {});
+                            this.originalPasswordJson = JSON.stringify(this.config.password || '');
+                            if (!silent) this.showNotification("Configuration saved successfully!"); 
+                            this.loadConfig(); 
+                        }
+                    });
+                },
+                switchTab(newTab) {
+                    const leaving = this.tab;
+                    if (leaving === newTab) return;
+
+                    this.showStreamPassword = false;
+                    this.showAdminPassword = false; 
+
+                    let isDirty = false;
+                    let msg = "";
+
+                    if (leaving === 'streams' && this.unsavedStreams.length > 0) {
+                        isDirty = true;
+                        msg = "⚠️ You are about to leave this page while changes are pending.\n\nIf you continue, these changes will not be saved.";
+                    } else if (leaving === 'servers' && this.unsavedServers.length > 0) {
+                        isDirty = true;
+                        msg = "⚠️ You are about to leave this page while changes are pending.\n\nIf you continue, these changes will not be saved.";
+                    } else if ((leaving === 'settings' || leaving === 'smtp') && this.hasUnsavedSettings) {
+                        isDirty = true;
+                        msg = "⚠️ You are about to leave this page while changes are pending.\n\nIf you continue, these changes will not be saved.";
+                    }
+
+                    if (isDirty) {
+                        if (!confirm(msg)) {
+                            return;
+                        } else {
+                            // Changes canceled: Reload previous settings from memory
+                            if (leaving === 'streams') this.config.streams = JSON.parse(this.originalStreamsJson);
+                            else if (leaving === 'servers') this.config.servers = JSON.parse(this.originalServersJson);
+                            else if (leaving === 'settings' || leaving === 'smtp') {
+                                this.config.settings = JSON.parse(this.originalSettingsJson);
+                                this.config.password = JSON.parse(this.originalPasswordJson);
+                            }
+                        }
+                    }
+
+                    this.tab = newTab;
+                    if(newTab === 'streams') this.activeStreamIndex = 0;
+                },
+                fetchStats() { 
+                    fetch('/api/system_stats').then(r => r.json()).then(d => { 
+                        let cpuEl = document.getElementById('navbar-cpu');
+                        let ramEl = document.getElementById('navbar-ram');
+                        if (cpuEl) cpuEl.innerText = d.cpu;
+                        if (ramEl) ramEl.innerText = d.ram;
+                    }); 
+                },  
+                getStatus(id) { return this.statusData.find(s => s.id === id) || { running: false, uptime: 0, title: '', listeners: -1 }; },
+                controlStream(id, action) { 
+                    if (action === 'start') {
+                        let stream = this.config.streams.find(s => s.id === id);
+                        if (stream && (stream.format === 'aac' || stream.format === 'aac_lc' || stream.format === 'he_aac' || stream.format === 'he_aac_v2') && !this.fdk_installed) {
+                            this.show_fdk_modal = true;
+                            return;
+                        }
+                    }
+                    fetch(`/api/${action}/${id}`); 
+                },
+                startAll() { 
+                    let missingFdk = false;
+                    this.config.streams.forEach(s => {
+                        if ((s.format === 'aac' || s.format === 'aac_lc' || s.format === 'he_aac' || s.format === 'he_aac_v2') && !this.fdk_installed) {
+                            missingFdk = true;
+                        } else {
+                            this.controlStream(s.id, 'start');
+                        }
+                    });
+                    if (missingFdk) {
+                        this.show_fdk_modal = true;
+                    }
+                },
+                stopAll() { this.config.streams.forEach(s => this.controlStream(s.id, 'stop')); },
+                downloadFDK() {
+                    this.fdk_downloading = true;
+                    fetch('/api/fdk/download', { method: 'POST' })
+                    .then(r => r.json())
+                    .then(d => {
+                        this.fdk_downloading = false;
+                        if (d.status === 'ok') {
+                            this.fdk_installed = true;
+                            this.show_fdk_modal = false;
+                            this.showNotification("libfdk-aac.dll installed successfully!");
+                        } else {
+                            alert("Download failed: " + d.message);
+                        }
+                    })
+                    .catch(e => {
+                        this.fdk_downloading = false;
+                        alert("Network error: " + e);
+                    });
+                },
+                addServer() { this.config.servers.push({ id: 'srv_' + Date.now(), name: 'New Server', type: 'icecast2', ip: '', user: 'source', port: '8000' }); },
+                deleteServer(index) {
+                    if(confirm("Are you sure you want to delete this server?")) {
+                        this.config.servers.splice(index, 1);
+                    }
+                },
+                dragStartServer(index) {
+                    setTimeout(() => {
+                        this.draggedServerIndex = index;
+                    }, 0);
+                },
+                dragEnterServer(index) {
+                    if (this.draggedServerIndex === null || this.draggedServerIndex === index) return;
+                    
+                    let now = Date.now();
+                    if (now - this.lastServerSwapTime < 150) return;
+                    this.lastServerSwapTime = now;
+
+                    const serverToMove = this.config.servers.splice(this.draggedServerIndex, 1)[0];
+                    this.config.servers.splice(index, 0, serverToMove);
+                    this.draggedServerIndex = index;
+                },
+                dropServer() {
+                    this.draggedServerIndex = null;
+                    this.saveConfig(true);
+                },
+                dragEndServer() {
+                    if (this.draggedServerIndex !== null) {
+                        this.draggedServerIndex = null;
+                        this.saveConfig(true);
+                    }
+                },
+                sortStreamsAZ() {
+                    let currentStreamId = this.config.streams[this.activeStreamIndex].id;
+                    this.config.streams.sort((a, b) => a.name.localeCompare(b.name));
+                    this.activeStreamIndex = this.config.streams.findIndex(s => s.id === currentStreamId);
+                    this.saveConfig(true);
+                },
+                dragStart(index) {
+                    setTimeout(() => {
+                        this.draggedStreamIndex = index;
+                    }, 0);
+                },
+                dragEnter(index) {
+                    if (this.draggedStreamIndex === null || this.draggedStreamIndex === index) return;
+                    
+                    let now = Date.now();
+                    if (now - this.lastSwapTime < 150) return;
+                    this.lastSwapTime = now;
+
+                    let currentStreamId = this.config.streams[this.activeStreamIndex].id;
+                    const streamToMove = this.config.streams.splice(this.draggedStreamIndex, 1)[0];
+                    this.config.streams.splice(index, 0, streamToMove);
+                    
+                    this.activeStreamIndex = this.config.streams.findIndex(s => s.id === currentStreamId);
+                    this.draggedStreamIndex = index;
+                },
+                drop() {
+                    this.draggedStreamIndex = null;
+                    this.saveConfig(true);
+                },
+                dragEnd() {
+                    if (this.draggedStreamIndex !== null) {
+                        this.draggedStreamIndex = null;
+                        this.saveConfig(true);
+                    }
+                },
+                addStream() { 
+                    let sName = prompt("Indicate a name for the new stream:", "My New Stream");
+                    if (!sName) return;
+                    let stId = 'st_' + Date.now();
+                    this.config.streams.push({ 
+                        id: stId, name: sName, auto_start: false, audio_device: '', format: 'mp3', bitrate: '128k', mount: '/stream', user: 'source', password: '', targets: [], 
+                        meta_source: 'none', meta_file_path: '', meta_http_url: '', meta_http_interval: 7, meta_custom_id: 'my-radio-station', meta_post_key: '', radio_name: sName, description: 'Encoded with WestBroadcast Encoder', genre: '', gain: '0', sample_rate: '48000', channels: '2', bit_depth: '0', audio_delay: '0.000', meta_delay: 0,
+                        loss_threshold_db: -45.0, loss_timeout_sec: 10.0, recovery_threshold_db: -35.0, recovery_timeout_sec: 5.0, alert_silent: false, alert_unreachable: false, unreachable_timeout_sec: 15.0
+                    });
+                    this.activeStreamIndex = this.config.streams.length - 1;
+                },
+                getServerName(id) {
+                    let s = this.config.servers.find(srv => srv.id === id);
+                    return s ? s.name : 'Unknown';
+                },
+                getServerUrl(id, mount) {
+                    let s = this.config.servers.find(srv => srv.id === id);
+                    if (!s) return '';
+                    
+                    let displayIp = s.ip;
+                    if (displayIp === '127.0.0.1' || displayIp === 'localhost') {
+                        displayIp = this.config.local_ip || window.location.hostname;
+                    }
+                    
+                    if (s.type === 'icecast2') return `http://${displayIp}:${s.port}${mount}`;
+                    if (s.type === 'rtp_mpegts') return `udp://${displayIp}:${s.port}`;
+                    if (s.type === 'rtp_pure') return `rtp://${displayIp}:${s.port}`;
+                    if (s.type === 'internal') {
+                        let ip = this.config.local_ip || window.location.hostname;
+                        return `http://${ip}:${s.port}/`;
+                    }
+                    return '';
+                },
+                deleteStream(index) {
+                    if(confirm("Are you sure you want to delete this stream?")) {
+                        this.config.streams.splice(index, 1);
+                        this.activeStreamIndex = Math.max(0, this.config.streams.length - 1);
+                    }
+                },
+                renameStream(stream) {
+                    let newName = prompt("Enter new name for the stream:", stream.name);
+                    if (newName && newName.trim() !== "") {
+                        stream.name = newName.trim();
+                        stream.radio_name = newName.trim();
+                        this.saveConfig(true);
+                    }
+                },
+                formatUptime(sec) {
+                    if (!sec) return 'Stopped';
+                    const d = Math.floor(sec / 86400);
+                    const h = Math.floor((sec % 86400) / 3600);
+                    const m = Math.floor((sec % 3600) / 60);
+                    const s = Math.floor(sec % 60);
+                    if (d > 0) return `${d} days, ${h}h ${m}m ${s}s`;
+                    if (h > 0) return `${h}h ${m}m ${s}s`;
+                    if (m > 0) return `${m}m ${s}s`;
+                    return `${s}s`;
+                },
+                formatSysUptime(totalSeconds) {
+                    if (!totalSeconds) return '00:00:00';
+                    const days = Math.floor(totalSeconds / 86400);
+                    const hours = Math.floor((totalSeconds % 86400) / 3600);
+                    const minutes = Math.floor((totalSeconds % 3600) / 60);
+                    const seconds = Math.floor(totalSeconds % 60);
+                    const hStr = hours.toString().padStart(2, '0');
+                    const mStr = minutes.toString().padStart(2, '0');
+                    const sStr = seconds.toString().padStart(2, '0');
+                    if (days > 0) return `${days}d ${hStr}:${mStr}:${sStr}`;
+                    return `${hStr}:${mStr}:${sStr}`;
+                },
+                showErrorDetails(msg) {
+                    alert("⚠️ CONNECTION ERROR DETAILS\n\n" + msg);
+                }
+            }
+        });
+        app.mount('#app');
+        </script>
+        {% endraw %}
+    {% endif %}
+
+</body>
+</html>
