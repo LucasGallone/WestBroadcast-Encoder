@@ -49,7 +49,7 @@ MP3, AAC* (AAC-LC, HE-AAC V1, HE-AAC V2), OGG Opus, OGG Vorbis, FLAC, WAV, and M
 <br>
 <br>
 • <b>Sending email alerts via SMTP</b> when one of your streams is silent, or the streaming server becomes unavailable.
-> _* Encoding in AAC format requires the Fraunhofer FDK library, which is not included for legal reasons.<br>It can be downloaded directly via the interface or installed manually. Please refer to the Wiki section for details and instructions._
+> _* AAC encoding requires the Fraunhofer FDK library, which is not included for legal reasons.<br>It can be downloaded directly via the interface or installed manually. Please refer to the Wiki section for details and instructions._
 ## 1. Installation instructions for Windows
 -> [Download the entire content of the repository by clicking here.](https://github.com/LucasGallone/WestBroadcast-Encoder/archive/refs/heads/main.zip)
 <br>
