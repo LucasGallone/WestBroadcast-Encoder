@@ -93,7 +93,7 @@ Need help configuring the encoder or understanding a specific setting?
 👉 [Click here to visit the Wiki section for detailed documentation.](https://github.com/LucasGallone/WestBroadcast-Encoder/wiki)
 <br>
 <br>
-If you discover any bugs, despite the rigorous pre-release testing, don't hesitate to report them in the ["Issues" section.](https://github.com/LucasGallone/WestBroadcast-Encoder/issues)
+If you discover any bugs, despite the rigorous pre-release testing, don't hesitate to report them in the [Issues](https://github.com/LucasGallone/WestBroadcast-Encoder/issues) section.
 ## Legal Notices and Licenses
 ### WestBroadcast Encoder
 This project is licensed under the GNU General Public License (GPL) v3.0.
