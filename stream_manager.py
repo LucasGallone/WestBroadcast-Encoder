@@ -434,6 +434,8 @@ class StreamManager:
                     time.sleep(reconnect_delay)
                     continue
                     
+            self.last_title = ""
+            self.pending_title = ""
             process_start_time = time.time()
             self.unreachable_start_time = 0 
             self.is_connecting = False
@@ -450,7 +452,11 @@ class StreamManager:
                 if first_attempt and (time.time() - process_start_time > 6.0):
                     first_attempt = False
                 self.unreachable_start_time = 0
-                self._update_metadata()
+                
+                # Wait 5 seconds for Icecast to fully register the stream before sending metadata
+                if (time.time() - process_start_time) > 5.0:
+                    self._update_metadata()
+                    
                 time.sleep(1)
 
             # --- EXIT PHASE (DEAD PROCESS) ---
@@ -549,7 +555,10 @@ class StreamManager:
                 elif bit_depth == "32": acodec = "pcm_s32le"
                 cmd.extend(["-c:a", acodec, "-ac", channels, "-ar", sample_rate])
 
-            cmd.extend(["-ice_name", self.config.get("radio_name", "WestBroadcast Encoder"), "-ice_description", self.config.get("description", "Live Stream"), "-ice_genre", self.config.get("genre", "Various")])
+            br_val = bitrate.replace('k', '') if format_audio not in ["wav", "flac"] else "Lossless"
+            ice_genre_str = f"{self.config.get('genre', 'Various')}\r\nice-audio-info: bitrate={br_val}\r\nice-bitrate: {br_val}"
+            
+            cmd.extend(["-ice_name", self.config.get("radio_name", "WestBroadcast Encoder"), "-ice_description", self.config.get("description", "Live Stream"), "-ice_genre", ice_genre_str])
 
             muxer_map = {"mp3": "mp3", "mp2": "mp2", "aac": "adts", "aac_lc": "adts", "opus": "ogg", "ogg": "ogg", "flac": "flac", "wav": "wav"}
             ct_map = {"mp3": "audio/mpeg", "mp2": "audio/mpeg", "aac": "audio/aac", "aac_lc": "audio/aac", "opus": "application/ogg", "ogg": "application/ogg", "flac": "audio/flac", "wav": "audio/wav"}
@@ -566,7 +575,14 @@ class StreamManager:
                 if srv["type"] == "icecast2":
                     ice_url = f"icecast://{stream_user}:{stream_pass}@{srv['ip']}:{srv['port']}{stream_mount}"
                     ice_url_escaped = ice_url.replace(":", "\\:")
-                    outputs.append(f"[f={muxer}:content_type={content_type}]{ice_url_escaped}")
+                    
+                    ice_muxer = muxer
+                    ice_ct = content_type
+                    if format_audio in ["flac", "wav"]:
+                        ice_muxer = "matroska"
+                        ice_ct = "audio/x-matroska"
+                        
+                    outputs.append(f"[f={ice_muxer}:content_type={ice_ct}]{ice_url_escaped}")
                 elif srv["type"] == "rtp_mpegts":
                     outputs.append(f"[f=mpegts]udp://{srv['ip']}:{srv['port']}?pkt_size=1316")
                 elif srv["type"] == "rtp_pure":
@@ -588,7 +604,14 @@ class StreamManager:
                 srv = targets[0]
                 if srv["type"] == "icecast2":
                     ice_url = f"icecast://{stream_user}:{stream_pass}@{srv['ip']}:{srv['port']}{stream_mount}"
-                    cmd.extend(["-content_type", content_type, "-f", muxer, ice_url])
+                    
+                    ice_muxer = muxer
+                    ice_ct = content_type
+                    if format_audio in ["flac", "wav"]:
+                        ice_muxer = "matroska"
+                        ice_ct = "audio/x-matroska"
+                        
+                    cmd.extend(["-content_type", ice_ct, "-f", ice_muxer, ice_url])
                 elif srv["type"] == "rtp_mpegts":
                     cmd.extend(["-f", "mpegts", f"udp://{srv['ip']}:{srv['port']}?pkt_size=1316"])
                 elif srv["type"] == "rtp_pure":
@@ -667,7 +690,12 @@ class StreamManager:
                 user = self.config.get('user', 'source')
                 auth = base64.b64encode(f"{user}:{stream_pass}".encode()).decode()
                 header = (f"SOURCE {mnt} HTTP/1.0\r\nAuthorization: Basic {auth}\r\n"
-                          f"Content-Type: audio/aac\r\nice-name: {self.config.get('radio_name', 'WestBroadcast Encoder')}\r\n\r\n")
+                          f"Content-Type: audio/aac\r\n"
+                          f"ice-name: {self.config.get('radio_name', 'WestBroadcast Encoder')}\r\n"
+                          f"ice-description: {self.config.get('description', 'Live Stream')}\r\n"
+                          f"ice-genre: {self.config.get('genre', 'Various')}\r\n"
+                          f"ice-audio-info: bitrate={b_rate}\r\n"
+                          f"ice-bitrate: {b_rate}\r\n\r\n")
                 sock.sendall(header.encode())
                 sock.settimeout(2.0)
                 if b"200" in sock.recv(1024):
@@ -1020,6 +1048,10 @@ class StreamManager:
             # POST FUNCTION AS SOURCE
             elif meta_source == "post":
                 title = getattr(self, 'post_title', "")
+                
+            # FIXED TEXT AS SOURCE
+            elif meta_source == "fixed":
+                title = self.config.get("meta_fixed_text", "").strip()
                 
         except Exception:
             pass

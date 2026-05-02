@@ -130,6 +130,7 @@ def load_config():
                 if 'meta_custom_id' not in st: st['meta_custom_id'] = "my-radio-station"
                 if 'meta_http_interval' not in st: st['meta_http_interval'] = 7
                 if 'meta_post_key' not in st: st['meta_post_key'] = ""
+                if 'meta_fixed_text' not in st: st['meta_fixed_text'] = ""
 
             return data
         except:
