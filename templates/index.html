@@ -609,7 +609,7 @@
                                                 <option value="file">Local Text File</option>
                                                 <option value="http">HTTP/HTTPS URL</option>
                                                 <option value="post">POST function from automation software</option>
-                                                <option value="fixed">Fixed Custom Text</option>
+                                                <option value="fixed">Fixed Text</option>
                                             </select>
 
                                             <div v-if="config.streams[activeStreamIndex].meta_source === 'file'" class="mb-3">
@@ -630,24 +630,24 @@
                                             <div v-if="config.streams[activeStreamIndex].meta_source === 'post'" class="mb-3 p-3 bg-light rounded border">
                                                 <div class="row g-2 mb-2">
                                                     <div class="col-md-6">
-                                                        <label class="small text-muted mb-1 fw-bold">Custom Stream ID:</label>
-                                                        <input v-model="config.streams[activeStreamIndex].meta_custom_id" class="form-control form-control-sm" placeholder="my_stream_id">
+                                                        <label class="small text-muted mb-1 fw-bold">Custom ID (Station Name):</label>
+                                                        <input v-model="config.streams[activeStreamIndex].meta_custom_id" class="form-control form-control-sm" placeholder="my-radio-station">
                                                     </div>
                                                     <div class="col-md-6">
-                                                        <label class="small text-muted mb-1 fw-bold">Security Key (key):</label>
-                                                        <input v-model="config.streams[activeStreamIndex].meta_post_key" class="form-control form-control-sm" placeholder="Optional key">
+                                                        <label class="small text-muted mb-1 fw-bold">Security Key (Optional):</label>
+                                                        <input v-model="config.streams[activeStreamIndex].meta_post_key" class="form-control form-control-sm">
                                                     </div>
                                                 </div>
-                                                <small class="text-muted d-block mt-2">Configure RadioDJ (Web Export) with these parameters:</small>
+                                                <small class="text-muted d-block mt-2">Use the following settings in your automation software (e.g. RadioDJ) to establish a connection with the encoder:</small>
                                                 <div class="bg-dark text-white p-2 rounded small mt-1 border border-secondary">
                                                     <div class="mb-1"><b class="text-info">URL:</b> http://{{ config.local_ip }}:{{ config.settings.web_port }}/api/metadata/{{ config.streams[activeStreamIndex].meta_custom_id }}</div>
-                                                    <div><b class="text-info">Custom Data:</b> key={{ config.streams[activeStreamIndex].meta_post_key || '[motdepasse]' }}&artist=$artist_enc$&title=$title_enc$</div>
+                                                    <div><b class="text-info">Custom Data:</b> <template v-if="config.streams[activeStreamIndex].meta_post_key">key={{ config.streams[activeStreamIndex].meta_post_key }}&</template>artist=$artist_enc$&title=$title_enc$</div>
                                                 </div>
                                             </div>
 
                                             <div v-if="config.streams[activeStreamIndex].meta_source === 'fixed'" class="mb-3 p-3 bg-light rounded border">
-                                                <label class="small text-muted mb-1 fw-bold">Fixed Text (Static Title):</label>
-                                                <input v-model="config.streams[activeStreamIndex].meta_fixed_text" class="form-control form-control-sm" placeholder="Example: My Stream - Live 24/7">
+                                                <label class="small text-muted mb-1 fw-bold">Indicate the custom text you want to display in the metadata:</label>
+                                                <input v-model="config.streams[activeStreamIndex].meta_fixed_text" class="form-control form-control-sm" placeholder="Example: The Best 80s Music Radio Station!">
                                             </div>
 
                                             <div v-if="config.streams[activeStreamIndex].meta_source !== 'none'" class="d-flex align-items-center gap-2">
