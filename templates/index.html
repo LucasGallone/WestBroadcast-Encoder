@@ -609,6 +609,7 @@
                                                 <option value="file">Local Text File</option>
                                                 <option value="http">HTTP/HTTPS URL</option>
                                                 <option value="post">POST function from automation software</option>
+                                                <option value="fixed">Fixed Custom Text</option>
                                             </select>
 
                                             <div v-if="config.streams[activeStreamIndex].meta_source === 'file'" class="mb-3">
@@ -642,6 +643,11 @@
                                                     <div class="mb-1"><b class="text-info">URL:</b> http://{{ config.local_ip }}:{{ config.settings.web_port }}/api/metadata/{{ config.streams[activeStreamIndex].meta_custom_id }}</div>
                                                     <div><b class="text-info">Custom Data:</b> key={{ config.streams[activeStreamIndex].meta_post_key || '[motdepasse]' }}&artist=$artist_enc$&title=$title_enc$</div>
                                                 </div>
+                                            </div>
+
+                                            <div v-if="config.streams[activeStreamIndex].meta_source === 'fixed'" class="mb-3 p-3 bg-light rounded border">
+                                                <label class="small text-muted mb-1 fw-bold">Fixed Text (Static Title):</label>
+                                                <input v-model="config.streams[activeStreamIndex].meta_fixed_text" class="form-control form-control-sm" placeholder="Example: My Stream - Live 24/7">
                                             </div>
 
                                             <div v-if="config.streams[activeStreamIndex].meta_source !== 'none'" class="d-flex align-items-center gap-2">
@@ -1587,7 +1593,7 @@
                     let stId = 'st_' + Date.now();
                     this.config.streams.push({ 
                         id: stId, name: sName, auto_start: false, audio_device: '', format: 'mp3', bitrate: '128k', mount: '/stream', user: 'source', password: '', targets: [], 
-                        meta_source: 'none', meta_file_path: '', meta_http_url: '', meta_http_interval: 7, meta_custom_id: 'my-radio-station', meta_post_key: '', radio_name: sName, description: 'Encoded with WestBroadcast Encoder', genre: '', gain: '0', sample_rate: '48000', channels: '2', bit_depth: '0', audio_delay: '0.000', meta_delay: 0,
+                        meta_source: 'none', meta_file_path: '', meta_http_url: '', meta_http_interval: 7, meta_custom_id: 'my-radio-station', meta_post_key: '', meta_fixed_text: '', radio_name: sName, description: 'Encoded with WestBroadcast Encoder', genre: '', gain: '0', sample_rate: '48000', channels: '2', bit_depth: '0', audio_delay: '0.000', meta_delay: 0,
                         loss_threshold_db: -45.0, loss_timeout_sec: 10.0, recovery_threshold_db: -35.0, recovery_timeout_sec: 5.0, alert_silent: false, alert_unreachable: false, unreachable_timeout_sec: 15.0
                     });
                     this.activeStreamIndex = this.config.streams.length - 1;
