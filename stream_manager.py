@@ -390,9 +390,11 @@ class StreamManager:
             clean_name = match.group(2).strip()
         else:
             clean_name = audio_device.replace("[WASAPI] ", "").replace("[DirectShow] ", "").strip()
-            
+
         sd_idx = None
         native_rate = 44100
+        configured_rate = int(self.config.get("sample_rate", "48000"))
+
         try:
             hostapis = sd.query_hostapis()
             devices = sd.query_devices()
@@ -408,7 +410,18 @@ class StreamManager:
                         sd_idx = i
                         break
             if sd_idx is not None:
-                native_rate = int(devices[sd_idx]['default_samplerate'])
+                # Try to use the configured sample rate
+                try:
+                    # Test if the device supports the configured sample rate
+                    sd.check_input_settings(device=sd_idx, samplerate=configured_rate, channels=2)
+                    native_rate = configured_rate
+                    if self.log_callback:
+                        self.log_callback("INFO", f"Stream \"{self.config.get('name', 'Unknown')}\": Capturing at {configured_rate}Hz")
+                except Exception as e:
+                    # Fall back to device default if configured rate not supported
+                    native_rate = int(devices[sd_idx]['default_samplerate'])
+                    if self.log_callback:
+                        self.log_callback("WARNING", f"Stream \"{self.config.get('name', 'Unknown')}\": Configured rate {configured_rate}Hz not supported, falling back to {native_rate}Hz")
         except: pass
 
         self.capture_sd_idx = sd_idx
