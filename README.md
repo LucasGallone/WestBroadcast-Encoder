@@ -23,7 +23,7 @@ Any feedback regarding other operating systems is welcome!
 
 <img width="1910" height="1016" alt="wbencoder-main-preview" src="https://github.com/user-attachments/assets/e5df0d2c-9b55-4de9-92c3-ba240ef8d009" />
 
-## What this tool offers
+## ⚡ What this tool offers
 • <b>Audio stream encoding using the following codecs:</b>
 <br>
 MP3, AAC* (AAC-LC, HE-AAC V1, HE-AAC V2), OGG Opus, OGG Vorbis, FLAC, WAV, and MP2.
@@ -54,7 +54,11 @@ MP3, AAC* (AAC-LC, HE-AAC V1, HE-AAC V2), OGG Opus, OGG Vorbis, FLAC, WAV, and M
 <br>
 • <b>Sending email alerts via SMTP</b> when one of your streams is silent, or the streaming server becomes unavailable.
 > _* AAC encoding requires the Fraunhofer FDK library, which is not included for legal reasons.<br>It can be downloaded directly via the interface or installed manually. Please refer to the Wiki section for details and instructions._
-## 1. Installation instructions for Windows
+## 💬 Available languages
+WestBroadcast Encoder is currently available exclusively in English.
+<br>
+A French translation is planned and will be added soon.
+## ⚙️ 1. Installation instructions for Windows
 -> [Download the entire content of the repository by clicking here.](https://github.com/LucasGallone/WestBroadcast-Encoder/archive/refs/heads/main.zip)
 <br>
 <br>
@@ -81,13 +85,13 @@ Even if nothing appears to be happening on the terminal, please wait until the p
 A Python window will open, displaying your machine's IP address, the port used by the webserver, and the default login password.
 <br>
 Be sure to keep this window open on the host machine, as well as the terminal, otherwise the software will close!
-## 2. Configuration
+## ⚙️ 2. Configuration
 Once installed, you must configure your stream(s) via the web interface.
 <br>
 The default port is 8090 and the default login password is **admin**.
 <br>
 (Changing the password at first use is STRONGLY recommended to prevent any unauthorized access!)
-## 3. Starting the encoder after the initial setup
+## 🚀 3. Starting the encoder after the initial setup
 For the next startups, simply run `Launch.bat` as you did during the initial installation.
 <br>
 At each startup, the script checks that all required dependencies are present on your machine, then starts the audio engine and the webserver.
@@ -98,7 +102,7 @@ Need help configuring the encoder or understanding a specific setting?
 <br>
 <br>
 If you discover any bugs, despite the rigorous pre-release testing, don't hesitate to report them in the [Issues](https://github.com/LucasGallone/WestBroadcast-Encoder/issues) section.
-## Legal Notices and Licenses
+## ⚖️ Legal Notices and Licenses
 ### WestBroadcast Encoder
 This project is licensed under the GNU General Public License (GPL) v3.0.
 <br>
