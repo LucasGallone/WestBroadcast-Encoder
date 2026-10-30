@@ -55,9 +55,14 @@ MP3, AAC* (AAC-LC, HE-AAC V1, HE-AAC V2), OGG Opus, OGG Vorbis, FLAC, WAV, and M
 • <b>Sending email alerts via SMTP</b> when one of your streams is silent, or the streaming server becomes unavailable.
 > _* AAC encoding requires the Fraunhofer FDK library, which is not included for legal reasons.<br>It can be downloaded directly via the interface or installed manually. Please refer to the Wiki section for details and instructions._
 ## 💬 Available languages
-WestBroadcast Encoder is currently available exclusively in English.
+WestBroadcast Encoder is available in English and French.
 <br>
-A French translation is planned and will be added soon.
+There are currently no plans to add other languages, in order to ensure the quality of the translation.
+<br>
+<br>
+If you would like to contribute a translation for a language **you are a native speaker of**, please feel free to do so.
+<br>
+Any contribution is appreciated and welcome.
 ## ⚙️ 1. Installation instructions for Windows
 -> [Download the entire content of the repository by clicking here.](https://github.com/LucasGallone/WestBroadcast-Encoder/archive/refs/heads/main.zip)
 <br>
