@@ -12,6 +12,7 @@ import logging
 from flask import Flask, request, jsonify, render_template, session, redirect, send_file, cli
 from flask_socketio import SocketIO
 import tkinter as tk
+from tkinter import messagebox
 from stream_manager import StreamManager, get_ffmpeg_path
 
 cli.show_server_banner = lambda *args: None
@@ -55,6 +56,7 @@ def load_config():
         default = {
             "password": "admin", 
             "settings": {
+                "language": "en",
                 "instance_name": "",
                 "hide_instance_on_login": False,
                 "dark_mode": False,
@@ -80,6 +82,7 @@ def load_config():
             if 'settings' not in data: data['settings'] = {}
             s = data['settings']
             if 'web_port' not in s: s['web_port'] = 8090
+            if 'language' not in s: s['language'] = 'en'
             
             # Instance options
             if 'instance_name' not in s: s['instance_name'] = ""
@@ -167,6 +170,7 @@ def index():
     client_ip = request.remote_addr
     now = time.time()
     config = load_config()
+    lang = config.get('settings', {}).get('language', 'en')
     
     # Bruteforce protection: Storing the IP address after 3 failed attempts
     if client_ip not in LOGIN_ATTEMPTS:
@@ -174,27 +178,27 @@ def index():
         
     # Bruteforce protection: Temporary access block for 90 seconds after 3 failed attempts
     if LOGIN_ATTEMPTS[client_ip]["lock_until"] > now:
-        error = "Due to multiple failed login attempts, your access to the server has been blocked for 90 seconds. Please wait and try again."
-        return render_template('index.html', logged_in=session.get('logged_in'), error=error, config=config)
+        error = "Due to multiple failed login attempts, your access to the server has been blocked for 90 seconds. Please wait and try again." if lang == 'en' else "En raison de multiples tentatives de connexion échouées, votre accès au serveur a été bloqué pendant 90 secondes. Veuillez patienter et réessayer."
+        return render_template('index.html', logged_in=session.get('logged_in'), error=error, config=config, lang=lang)
 
     if request.method == 'POST':
         if request.form.get('password') == config.get('password', 'admin'):
             session['logged_in'] = True
             LOGIN_ATTEMPTS[client_ip] = {"count": 0, "lock_until": 0}
-            add_log("AUTH", f"Successful login from IP {client_ip}")
+            add_log("AUTH", f"Successful login from IP {client_ip}" if lang == 'en' else f"Connexion réussie depuis l'IP {client_ip}")
             return redirect('/')
         else:
             LOGIN_ATTEMPTS[client_ip]["count"] += 1
             if LOGIN_ATTEMPTS[client_ip]["count"] >= 3:
                 LOGIN_ATTEMPTS[client_ip]["lock_until"] = now + 90
-                error = "Due to multiple failed login attempts, your access to the server has been blocked for 90 seconds. Please wait and try again."
+                error = "Due to multiple failed login attempts, your access to the server has been blocked for 90 seconds. Please wait and try again." if lang == 'en' else "En raison de multiples tentatives de connexion échouées, votre accès au serveur a été bloqué pendant 90 secondes. Veuillez patienter et réessayer."
             else:
-                error = "Incorrect password. Please try again."
-            add_log("AUTH", f"Failed login attempt from IP {client_ip}")
+                error = "Incorrect password. Please try again." if lang == 'en' else "Mot de passe incorrect. Veuillez réessayer."
+            add_log("AUTH", f"Failed login attempt from IP {client_ip}" if lang == 'en' else f"Tentative de connexion échouée depuis l'IP {client_ip}")
 
-    return render_template('index.html', logged_in=session.get('logged_in'), error=error, config=config)
+    return render_template('index.html', logged_in=session.get('logged_in'), error=error, config=config, lang=lang)
 
-def get_restarting_page(message, target_port=None):
+def get_restarting_page(message, target_port=None, lang='en'):
     redirect_url = "'/'"
     if target_port:
         redirect_url = f"window.location.protocol + '//' + window.location.hostname + ':{target_port}/'"
@@ -216,7 +220,7 @@ def get_restarting_page(message, target_port=None):
         <div class="card">
             <div class="loader"></div>
             <h2>{message}</h2>
-            <p>Please wait. You will be automatically redirected to the login page in 5 seconds.</p>
+            <p>{"Please wait. You will be automatically redirected to the login page in 5 seconds." if lang == 'en' else "Veuillez patienter. Vous serez automatiquement redirigé vers la page de connexion dans 5 secondes."}</p>
         </div>
         <script>
             setTimeout(function() {{ window.location.href = {redirect_url}; }}, 5000);
@@ -243,7 +247,8 @@ def start_stream(stream_id):
     if stream_id in streams_engines:
         if not streams_engines[stream_id].running:
             streams_engines[stream_id].start()
-            add_log("SYSTEM", f"Stream \"{streams_engines[stream_id].config['name']}\" started.")
+            lang = load_config().get('settings', {}).get('language', 'en')
+            add_log("SYSTEM", f"Stream \"{streams_engines[stream_id].config['name']}\" started." if lang == 'en' else f"Flux \"{streams_engines[stream_id].config['name']}\" démarré.")
     return jsonify({"status": "ok"})
 
 @app.route('/api/stop/<stream_id>')
@@ -251,7 +256,8 @@ def stop_stream(stream_id):
     if stream_id in streams_engines:
         if streams_engines[stream_id].running:
             streams_engines[stream_id].stop()
-            add_log("SYSTEM", f"Stream \"{streams_engines[stream_id].config['name']}\" stopped.")
+            lang = load_config().get('settings', {}).get('language', 'en')
+            add_log("SYSTEM", f"Stream \"{streams_engines[stream_id].config['name']}\" stopped." if lang == 'en' else f"Flux \"{streams_engines[stream_id].config['name']}\" arrêté.")
     return jsonify({"status": "ok"})
 
 @app.route('/api/sdp/<stream_id>')
@@ -275,6 +281,7 @@ def get_config():
 def update_config():
     old_config = load_config()
     new_config = request.json
+    lang = new_config.get('settings', {}).get('language', 'en')
     
     # Comparing webserver ports before saving
     old_port = int(old_config.get('settings', {}).get('web_port', 8090))
@@ -283,7 +290,7 @@ def update_config():
     save_config(new_config)
     
     if old_port != new_port:
-        add_log("SYSTEM", f"Webserver port changed from {old_port} to {new_port}. Restarting system...")
+        add_log("SYSTEM", f"Webserver port changed from {old_port} to {new_port}. Restarting system..." if lang == 'en' else f"Port du serveur web modifié de {old_port} à {new_port}. Redémarrage du système...")
         def do_restart():
             time.sleep(1)
             cleanup_all_processes()
@@ -292,12 +299,13 @@ def update_config():
         threading.Thread(target=do_restart, daemon=True).start()
         return jsonify({"status": "restarting", "new_port": new_port})
     
-    add_log("SYSTEM", "Configuration saved.")
+    add_log("SYSTEM", "Configuration saved." if lang == 'en' else "Configuration sauvegardée.")
     # Configuration apply in the background
     threading.Thread(target=apply_dynamic_config, args=(old_config, new_config), daemon=True).start()
     return jsonify({"status": "success"})
 
 def apply_dynamic_config(old_config, new_config):
+    lang = new_config.get('settings', {}).get('language', 'en')
     old_streams = {s['id']: s for s in old_config.get('streams', [])}
     new_streams = {s['id']: s for s in new_config.get('streams', [])}
     
@@ -310,7 +318,7 @@ def apply_dynamic_config(old_config, new_config):
         if sid not in new_streams:
             if engine.running:
                 engine.stop()
-                add_log("SYSTEM", f"Stream \"{engine.config.get('name', sid)}\" stopped (deleted).")
+                add_log("SYSTEM", f"Stream \"{engine.config.get('name', sid)}\" stopped (deleted)." if lang == 'en' else f"Flux \"{engine.config.get('name', sid)}\" arrêté (supprimé).")
             else:
                 engine.stop()
             del streams_engines[sid]
@@ -334,9 +342,9 @@ def apply_dynamic_config(old_config, new_config):
                 
                 if was_running:
                     new_engine.start()
-                    add_log("SYSTEM", f"Stream \"{new_streams[sid].get('name', sid)}\" updated and restarted.")
+                    add_log("SYSTEM", f"Stream \"{new_streams[sid].get('name', sid)}\" updated and restarted." if lang == 'en' else f"Flux \"{new_streams[sid].get('name', sid)}\" mis à jour et redémarré.")
                 else:
-                    add_log("SYSTEM", f"Stream \"{new_streams[sid].get('name', sid)}\" updated.")
+                    add_log("SYSTEM", f"Stream \"{new_streams[sid].get('name', sid)}\" updated." if lang == 'en' else f"Flux \"{new_streams[sid].get('name', sid)}\" mis à jour.")
             else:
                 # Simple references update without restart
                 engine.config = new_streams[sid]
@@ -351,7 +359,7 @@ def apply_dynamic_config(old_config, new_config):
             streams_engines[sid] = new_engine
             if s_conf.get('auto_start', False):
                 new_engine.start()
-                add_log("SYSTEM", f"Stream \"{s_conf.get('name', sid)}\" created and started.")
+                add_log("SYSTEM", f"Stream \"{s_conf.get('name', sid)}\" created and started." if lang == 'en' else f"Flux \"{s_conf.get('name', sid)}\" créé et démarré.")
 
 @app.route('/api/sys/export')
 def sys_export():
@@ -383,33 +391,38 @@ def api_logs():
 @app.route('/api/logs/clear', methods=['POST'])
 def clear_logs():
     INTERNAL_LOGS.clear()
-    add_log("SYSTEM", "Logs cleared by user.")
+    lang = load_config().get('settings', {}).get('language', 'en')
+    add_log("SYSTEM", "Logs cleared by user." if lang == 'en' else "Journaux effacés par l'utilisateur.")
     return jsonify({'status': 'ok'})
 
 @app.route('/api/logs/export')
 def export_logs():
     from flask import Response
+    lang = load_config().get('settings', {}).get('language', 'en')
+    header = "Timestamp | Type | Event\n--------------------------\n" if lang == 'en' else "Horodatage | Type | Événement\n--------------------------\n"
     def generate():
-        yield "Timestamp | Type | Event\n--------------------------\n"
+        yield header
         for l in INTERNAL_LOGS: yield f"{l['timestamp']} | {l['level']} | {l['event']}\n"
     return Response(generate(), mimetype="text/plain", headers={"Content-Disposition": "attachment;filename=logs.txt"})
 
 # --- System routes ---
 @app.route('/api/sys/restart')
 def sys_restart():
-    add_log("SYSTEM", "System restart requested.")
+    lang = load_config().get('settings', {}).get('language', 'en')
+    add_log("SYSTEM", "System restart requested." if lang == 'en' else "Redémarrage du système demandé.")
     def do_restart():
         time.sleep(1)
         cleanup_all_processes()
         subprocess.Popen([sys.executable] + sys.argv)
         os._exit(0)
     threading.Thread(target=do_restart, daemon=True).start()
-    return get_restarting_page("The encoder is restarting...")
+    return get_restarting_page("The encoder is restarting..." if lang == 'en' else "L'encodeur redémarre...", lang=lang)
 
 @app.route('/api/sys/reset')
 def sys_reset():
+    lang = load_config().get('settings', {}).get('language', 'en')
     if os.path.exists(CONFIG_FILE): os.remove(CONFIG_FILE)
-    add_log("SYSTEM", "Factory reset requested.")
+    add_log("SYSTEM", "Factory reset requested." if lang == 'en' else "Restauration des paramètres d'usine demandée.")
     def do_reset():
         time.sleep(1)
         cleanup_all_processes()
@@ -417,14 +430,15 @@ def sys_reset():
         os._exit(0)
     threading.Thread(target=do_reset, daemon=True).start()
     # Forcing automatic redirect to port 8090 after factory reset
-    return get_restarting_page("Factory reset complete. The encoder is restarting...", target_port=8090)
+    return get_restarting_page("Factory reset complete. The encoder is restarting..." if lang == 'en' else "Restauration d'usine terminée. L'encodeur redémarre...", target_port=8090, lang=lang)
 
 @app.route('/api/sys/import', methods=['POST'])
 def sys_import():
+    lang = load_config().get('settings', {}).get('language', 'en')
     file = request.files.get('config_file')
     if file and file.filename.endswith('.json'):
         file.save(CONFIG_FILE)
-        add_log("SYSTEM", "Configuration imported. Restarting backend...")
+        add_log("SYSTEM", "Configuration imported. Restarting backend..." if lang == 'en' else "Configuration importée. Redémarrage du backend...")
         
         # Checking webserver port in the imported configuration to automatically redirect the user after restart
         try:
@@ -475,14 +489,17 @@ def smtp_test():
         s.login(cfg_smtp["user"], cfg_smtp["pass"])
         s.send_message(msg)
         s.quit()
-        add_log("SYSTEM", "SMTP Test email sent successfully.")
-        return jsonify({"status": "ok", "message": "Test OK. Email sent."})
+        lang = load_config().get('settings', {}).get('language', 'en')
+        add_log("SYSTEM", "SMTP Test email sent successfully." if lang == 'en' else "Email de test SMTP envoyé avec succès.")
+        return jsonify({"status": "ok", "message": "Test OK. Email sent." if lang == 'en' else "Test OK. Mail envoyé."})
     except Exception as e:
-        add_log("ERROR", f"SMTP Test failed: {str(e)}")
+        lang = load_config().get('settings', {}).get('language', 'en')
+        add_log("ERROR", f"SMTP Test failed: {str(e)}" if lang == 'en' else f"Échec du test SMTP : {str(e)}")
         return jsonify({"status": "error", "message": f"SMTP Error: {str(e)}"})
 
 @app.route('/api/fdk/download', methods=['POST'])
 def download_fdk():
+    lang = load_config().get('settings', {}).get('language', 'en')
     try:
         import urllib.request
         # Link for the automatic download of Libfdk-AAC
@@ -495,21 +512,22 @@ def download_fdk():
         urllib.request.install_opener(opener)
         
         urllib.request.urlretrieve(url, dest)
-        add_log("SYSTEM", "libfdk-aac.dll was downloaded and installed successfully.")
+        add_log("SYSTEM", "libfdk-aac.dll was downloaded and installed successfully." if lang == 'en' else "libfdk-aac.dll a été téléchargé et installé avec succès.")
         return jsonify({"status": "ok"})
     except Exception as e:
-        add_log("ERROR", f"Failed to download libfdk-aac.dll: {str(e)}")
+        add_log("ERROR", f"Failed to download libfdk-aac.dll: {str(e)}" if lang == 'en' else f"Échec du téléchargement de libfdk-aac.dll : {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 def init_engines():
     config = load_config()
+    lang = config.get('settings', {}).get('language', 'en')
     for engine in streams_engines.values(): engine.stop()
     streams_engines.clear()
     for st in config['streams']:
         engine = StreamManager(st, config['servers'], config['settings'], log_callback=add_log)
         streams_engines[st['id']] = engine
         if st.get('auto_start', False):
-            add_log("SYSTEM", f"Stream \"{st.get('name', st['id'])}\" started automatically.")
+            add_log("SYSTEM", f"Stream \"{st.get('name', st['id'])}\" started automatically." if lang == 'en' else f"Flux \"{st.get('name', st['id'])}\" démarré automatiquement.")
             engine.start()
 
 # Memory from the last valid level to "compensate" for the technical jitter
@@ -591,28 +609,55 @@ atexit.register(cleanup_all_processes)
 def run_gui():
     cleanup_all_processes()
 
-    add_log("SYSTEM", "Backend started.")
     config = load_config()
+    lang = config.get('settings', {}).get('language', 'en')
+    add_log("SYSTEM", "Backend started." if lang == 'en' else "Backend démarré.")
     port = config['settings'].get('web_port', 8090)
     
     root = tk.Tk()
     root.title("WestBroadcast Encoder")
-    root.geometry("450x150")
+    root.geometry("450x230")
+    root.configure(bg="#eef2f5")
     root.eval('tk::PlaceWindow . center')
     
     def on_closing():
-        cleanup_all_processes()
-        root.destroy()
-        os._exit(0)
+        current_lang = load_config().get('settings', {}).get('language', 'en')
+        title = "Confirmation Request" if current_lang == 'en' else "Demande de confirmation"
+        msg = "Are you sure you want to stop WestBroadcast Encoder?\n\nWARNING: Closing this window will cause all encoders to stop." if current_lang == 'en' else "Êtes-vous sûr de vouloir arrêter WestBroadcast Encoder ?\n\nATTENTION : La fermeture de cette fenêtre occasionnera l'interruption de tous les encodeurs."
+        if messagebox.askyesno(title, msg):
+            cleanup_all_processes()
+            root.destroy()
+            os._exit(0)
         
     root.protocol("WM_DELETE_WINDOW", on_closing)
     
     ip = get_local_ip()
     
-    tk.Label(root, text=f"WEBSERVER IS RUNNING ON PORT {port}", fg="green", font=("Segoe UI", 12, "bold")).pack(pady=(15, 0))
-    tk.Label(root, text="KEEP THIS WINDOW OPEN FOR THE ENCODING!", fg="red", font=("Segoe UI", 10, "bold")).pack(pady=(0, 5))
-    tk.Label(root, text=f"IP: {ip}", fg="#333", font=("Segoe UI", 10)).pack(pady=2)
-    tk.Button(root, text="CLICK HERE TO OPEN THE WEBSERVER INTERFACE\n(Default password: admin)", bg="#3c8dbc", fg="white", font=("Segoe UI", 9, "bold"), command=open_browser).pack(pady=10)
+    lbl1 = f"WEBSERVER IS RUNNING ON PORT {port}" if lang == 'en' else f"SERVEUR WEB ACTIF SUR LE PORT {port}"
+    lbl2 = "PLEASE KEEP THIS WINDOW OPEN FOR THE STREAMS ENCODING!" if lang == 'en' else "PENSEZ À GARDER CETTE FENÊTRE OUVERTE POUR L'ENCODAGE DES FLUX !"
+    btn_txt = "CLICK HERE TO OPEN THE WEBSERVER INTERFACE\n(Default password: admin)" if lang == 'en' else "CLIQUEZ ICI POUR ACCÉDER À L'INTERFACE WEB\n(Mot de passe par défaut : admin)"
+    txt_ip = f"IP: {ip}" if lang == 'en' else f"IP : {ip}"
+    
+    tk.Label(root, text=lbl1, fg="#198754", bg="#eef2f5", font=("Segoe UI", 13, "bold")).pack(pady=(20, 5))
+    tk.Label(root, text=lbl2, fg="#dc3545", bg="#eef2f5", font=("Segoe UI", 9)).pack(pady=(0, 10))
+    tk.Label(root, text=txt_ip, fg="#555", bg="#eef2f5", font=("Segoe UI", 11)).pack(pady=(0, 15))
+    
+    btn = tk.Button(root, text=btn_txt, bg="#3c8dbc", fg="white", activebackground="#337ab7", activeforeground="white", font=("Segoe UI", 9, "bold"), relief=tk.FLAT, cursor="hand2", command=open_browser)
+    btn.pack(fill=tk.X, padx=40, pady=(0, 15), ipadx=10, ipady=6)
+    
+    lbl_counter = tk.Label(root, text="", fg="#333", bg="#eef2f5", font=("Segoe UI", 10, "bold"))
+    lbl_counter.pack(pady=(0, 10))
+    
+    def update_counter():
+        total = len(streams_engines)
+        active = sum(1 for engine in streams_engines.values() if engine.running)
+        if lang == 'fr':
+            lbl_counter.config(text=f"Encodeurs actifs : {active}/{total}")
+        else:
+            lbl_counter.config(text=f"Active encoders: {active}/{total}")
+        root.after(1000, update_counter)
+        
+    update_counter()
     
     threading.Thread(target=run_flask, daemon=True).start()
     init_engines()

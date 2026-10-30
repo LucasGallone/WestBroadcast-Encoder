@@ -368,7 +368,9 @@ class StreamManager:
                             # Logging warning event for unreachable server
                             if not GLOBAL_SERVER_STATE[target_id]['log_sent']:
                                 if getattr(self, 'log_callback', None):
-                                    self.log_callback("WARNING", f"Streaming server \"{srv.get('name', 'Unknown')}\" is unreachable. Attempting to reconnect.")
+                                    lang = self.settings.get('language', 'en')
+                                    msg = f"Streaming server \"{srv.get('name', 'Unknown')}\" is unreachable. Attempting to reconnect." if lang == 'en' else f"Le serveur de streaming \"{srv.get('name', 'Unknown')}\" est injoignable. Tentative de reconnexion."
+                                    self.log_callback("WARNING", msg)
                                 GLOBAL_SERVER_STATE[target_id]['log_sent'] = True
 
                             if not GLOBAL_SERVER_STATE[target_id]['email_sent']:
@@ -416,12 +418,16 @@ class StreamManager:
                     sd.check_input_settings(device=sd_idx, samplerate=configured_rate, channels=2)
                     native_rate = configured_rate
                     if self.log_callback:
-                        self.log_callback("INFO", f"Stream \"{self.config.get('name', 'Unknown')}\": Capturing at {configured_rate}Hz")
+                        lang = self.settings.get('language', 'en')
+                        msg = f"Stream \"{self.config.get('name', 'Unknown')}\": Capturing at {configured_rate}Hz" if lang == 'en' else f"Flux \"{self.config.get('name', 'Unknown')}\" : Capture à {configured_rate}Hz"
+                        self.log_callback("INFO", msg)
                 except Exception as e:
                     # Fall back to device default if configured rate not supported
                     native_rate = int(devices[sd_idx]['default_samplerate'])
                     if self.log_callback:
-                        self.log_callback("WARNING", f"Stream \"{self.config.get('name', 'Unknown')}\": Configured rate {configured_rate}Hz not supported, falling back to {native_rate}Hz")
+                        lang = self.settings.get('language', 'en')
+                        msg = f"Stream \"{self.config.get('name', 'Unknown')}\": Configured sample rate ({configured_rate}Hz) not supported, falling back to {native_rate}Hz" if lang == 'en' else f"Flux \"{self.config.get('name', 'Unknown')}\" : Le taux d\'échantillonnage défini ({configured_rate}Hz) n'est pas supporté, basculement à {native_rate}Hz"
+                        self.log_callback("WARNING", msg)
         except: pass
 
         self.capture_sd_idx = sd_idx
@@ -477,11 +483,14 @@ class StreamManager:
                 self.is_connecting = True 
                 if first_attempt:
                     self.startup_failed = True
+                    lang = self.settings.get('language', 'en')
                     err = getattr(self, 'last_ffmpeg_error', '').strip()
-                    if not err: err = "Process crashed within the first 6 seconds (Check Icecast Password/URL)."
-                    self.startup_error_msg = f"Failed to connect to Icecast.\n\n[LOGS]:\n{err}"
+                    if not err: err = "Process crashed within the first 6 seconds (Check Icecast Password/URL)." if lang == 'en' else "Le processus a planté dans les 6 premières secondes (Vérifiez l'URL/Mot de passe Icecast)."
+                    self.startup_error_msg = f"Failed to connect to Icecast.\n\n[LOGS]:\n{err}" if lang == 'en' else f"Échec de connexion à Icecast.\n\n[LOGS] :\n{err}"
                     self.running = False
-                    if self.log_callback: self.log_callback("ERROR", f"Stream \"{self.config.get('name', 'Unknown')}\" crashed at startup.")
+                    if self.log_callback:
+                        msg = f"Stream \"{self.config.get('name', 'Unknown')}\" crashed at startup." if lang == 'en' else f"Le flux \"{self.config.get('name', 'Unknown')}\" a planté au démarrage."
+                        self.log_callback("ERROR", msg)
                     break
                 else:
                     # Classical disconnection
@@ -935,7 +944,10 @@ class StreamManager:
                 while self.running:
                     sd.sleep(100)
         except Exception as e: 
-            if getattr(self, 'log_callback', None): self.log_callback("ERROR", f"Audio input error: {e}")
+            if getattr(self, 'log_callback', None): 
+                lang = self.settings.get('language', 'en')
+                msg = f"Audio input error: {e}" if lang == 'en' else f"Erreur d'entrée audio : {e}"
+                self.log_callback("ERROR", msg)
 
     def _update_metadata(self):
         now = time.time()
@@ -1132,21 +1144,26 @@ class StreamManager:
         
         subject = ""
         body = ""
+        lang = self.settings.get("language", "en")
         
         if status == "SILENT":
-            subject = f"{prefix} {stream_name_up} is SILENT!"
-            body = f"{stream_name_up} is currently SILENT!\nAnomaly detected on: {date_str} at {time_str}\n\nYou will be notified as soon as the audio is restored."
+            subject = f"{prefix} {stream_name_up} is SILENT!" if lang == 'en' else f"{prefix} {stream_name_up} est SILENCIEUX !"
+            body = (f"{stream_name_up} is currently SILENT!\nAnomaly detected on: {date_str} at {time_str}\n\nYou will be notified as soon as the audio is restored." 
+                    if lang == 'en' else f"{stream_name_up} est actuellement SILENCIEUX !\nAnomalie détectée le : {date_str} à {time_str}\n\nVous serez notifié dès que le son sera rétabli.")
         elif status == "RECOVERED":
-            subject = f"{prefix} Recovery Notification for {stream_name_up}"
-            body = f"{stream_name_up} is no longer silent.\nNormal broadcasting has resumed.\n\nNotification sent on: {date_str} at {time_str}"
+            subject = f"{prefix} Recovery Notification for {stream_name_up}" if lang == 'en' else f"{prefix} Notification de rétablissement pour {stream_name_up}"
+            body = (f"{stream_name_up} is no longer silent.\nNormal broadcasting has resumed.\n\nNotification sent on: {date_str} at {time_str}"
+                    if lang == 'en' else f"{stream_name_up} n'est plus silencieux.\nLa diffusion normale a repris.\n\nNotification envoyée le : {date_str} à {time_str}")
         elif status == "SERVER_DOWN":
             srv_name = context_data
-            subject = f"{prefix} Streaming server {srv_name.upper()} is UNREACHABLE!"
-            body = f"Connection to the \"{srv_name}\" streaming server has been lost!\nAnomaly detected on: {date_str} at {time_str}\n\nYou will be notified as soon as the connection is restored."
+            subject = f"{prefix} Streaming server {srv_name.upper()} is UNREACHABLE!" if lang == 'en' else f"{prefix} Le serveur {srv_name.upper()} est INJOIGNABLE !"
+            body = (f"Connection to the \"{srv_name}\" streaming server has been lost!\nAnomaly detected on: {date_str} at {time_str}\n\nYou will be notified as soon as the connection is restored."
+                    if lang == 'en' else f"La connexion au serveur de streaming \"{srv_name}\" a été perdue !\nAnomalie détectée le : {date_str} à {time_str}\n\nVous serez notifié dès que la connexion sera rétablie.")
         elif status == "SERVER_RECOVERED":
             srv_name = context_data
-            subject = f"{prefix} Recovery Notification for streaming server {srv_name.upper()}"
-            body = f"Connection to the \"{srv_name}\" streaming server has been restored.\nAll broadcasting to this server has resumed.\n\nNotification sent on: {date_str} at {time_str}"
+            subject = f"{prefix} Recovery Notification for streaming server {srv_name.upper()}" if lang == 'en' else f"{prefix} Notification de rétablissement pour le serveur {srv_name.upper()}"
+            body = (f"Connection to the \"{srv_name}\" streaming server has been restored.\nAll broadcasting to this server has resumed.\n\nNotification sent on: {date_str} at {time_str}"
+                    if lang == 'en' else f"La connexion au serveur de streaming \"{srv_name}\" a été rétablie.\nToute diffusion vers ce serveur a repris normalement.\n\nNotification envoyée le : {date_str} à {time_str}")
         
         try:
             msg = EmailMessage()
@@ -1168,9 +1185,11 @@ class StreamManager:
             s.login(smtp["user"], smtp["pass"])
             s.send_message(msg)
             s.quit()
-            if self.log_callback: self.log_callback("INFO", f"Email sent via SMTP.")
+            if self.log_callback:
+                self.log_callback("INFO", "Email sent via SMTP." if lang == 'en' else "Email envoyé via SMTP.")
         except Exception as e: 
-            if self.log_callback: self.log_callback("ERROR", f"Failed to send an email via SMTP: {str(e)}")
+            if self.log_callback:
+                self.log_callback("ERROR", f"Failed to send an email via SMTP: {str(e)}" if lang == 'en' else f"Échec de l'envoi d'un email via SMTP : {str(e)}")
 
     def _monitor_audio_silence_only(self):
         loss_thresh = float(self.config.get("loss_threshold_db", -45.0))
@@ -1196,7 +1215,9 @@ class StreamManager:
                                 GLOBAL_SERVER_STATE[target_id]['email_sent'] = False
                                 GLOBAL_SERVER_STATE[target_id]['log_sent'] = False
                                 if getattr(self, 'log_callback', None):
-                                    self.log_callback("RECOVERY", f"Connection to streaming server \"{srv.get('name', 'Unknown')}\" has been restored.")
+                                    lang = self.settings.get('language', 'en')
+                                    msg = f"Connection to streaming server \"{srv.get('name', 'Unknown')}\" has been restored." if lang == 'en' else f"La connexion au serveur de streaming \"{srv.get('name', 'Unknown')}\" a été rétablie."
+                                    self.log_callback("RECOVERY", msg)
                                 self._send_email_alert("SERVER_RECOVERED", srv.get('name', 'Unknown'), bypass_spam=True)
             
             if not alert_silent: continue
@@ -1212,7 +1233,9 @@ class StreamManager:
                     if (now - self.silence_start_time) >= loss_timeout and not self.is_silent_state:
                         self.is_silent_state = True
                         if getattr(self, 'log_callback', None): 
-                            self.log_callback("WARNING", f"Silence detected on \"{self.config.get('name', 'Unknown')}\".")
+                            lang = self.settings.get('language', 'en')
+                            msg = f"Silence detected on \"{self.config.get('name', 'Unknown')}\"." if lang == 'en' else f"Silence détecté sur \"{self.config.get('name', 'Unknown')}\"."
+                            self.log_callback("WARNING", msg)
                         self._send_email_alert("SILENT", "")
             else:
                 self.silence_start_time = 0
@@ -1223,7 +1246,9 @@ class StreamManager:
                         if (now - self.recovery_start_time) >= rec_timeout:
                             self.is_silent_state = False
                             if getattr(self, 'log_callback', None): 
-                                self.log_callback("RECOVERY", f"Stream \"{self.config.get('name', 'Unknown')}\" is no longer silent.")
+                                lang = self.settings.get('language', 'en')
+                                msg = f"Stream \"{self.config.get('name', 'Unknown')}\" is no longer silent." if lang == 'en' else f"Le flux \"{self.config.get('name', 'Unknown')}\" n'est plus silencieux."
+                                self.log_callback("RECOVERY", msg)
                             self._send_email_alert("RECOVERED", "", bypass_spam=True)
 
     def get_status(self):
