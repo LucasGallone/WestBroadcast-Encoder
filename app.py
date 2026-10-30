@@ -620,6 +620,13 @@ def run_gui():
     root.configure(bg="#eef2f5")
     root.eval('tk::PlaceWindow . center')
     
+    ico_path = os.path.join(BASE_DIR, 'static', 'favicon.ico')
+    if os.path.exists(ico_path):
+        try:
+            root.iconbitmap(ico_path)
+        except Exception:
+            pass
+    
     def on_closing():
         current_lang = load_config().get('settings', {}).get('language', 'en')
         title = "Confirmation Request" if current_lang == 'en' else "Demande de confirmation"
