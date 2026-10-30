@@ -178,7 +178,7 @@ def index():
         
     # Bruteforce protection: Temporary access block for 90 seconds after 3 failed attempts
     if LOGIN_ATTEMPTS[client_ip]["lock_until"] > now:
-        error = "Due to multiple failed login attempts, your access to the server has been blocked for 90 seconds. Please wait and try again." if lang == 'en' else "En raison de multiples tentatives de connexion échouées, votre accès au serveur a été bloqué pendant 90 secondes. Veuillez patienter et réessayer."
+        error = "Due to multiple failed login attempts, your access to the server has been blocked for 90 seconds. Please wait and try again." if lang == 'en' else "En raison de multiples tentatives de connexion échouées, votre accès est temporairement bloqué pendant 90 secondes. Veuillez patienter, puis réessayez."
         return render_template('index.html', logged_in=session.get('logged_in'), error=error, config=config, lang=lang)
 
     if request.method == 'POST':
@@ -191,7 +191,7 @@ def index():
             LOGIN_ATTEMPTS[client_ip]["count"] += 1
             if LOGIN_ATTEMPTS[client_ip]["count"] >= 3:
                 LOGIN_ATTEMPTS[client_ip]["lock_until"] = now + 90
-                error = "Due to multiple failed login attempts, your access to the server has been blocked for 90 seconds. Please wait and try again." if lang == 'en' else "En raison de multiples tentatives de connexion échouées, votre accès au serveur a été bloqué pendant 90 secondes. Veuillez patienter et réessayer."
+                error = "Due to multiple failed login attempts, your access to the server has been blocked for 90 seconds. Please wait and try again." if lang == 'en' else "En raison de multiples tentatives de connexion échouées, votre accès est temporairement bloqué pendant 90 secondes. Veuillez patienter, puis réessayez."
             else:
                 error = "Incorrect password. Please try again." if lang == 'en' else "Mot de passe incorrect. Veuillez réessayer."
             add_log("AUTH", f"Failed login attempt from IP {client_ip}" if lang == 'en' else f"Tentative de connexion échouée depuis l'IP {client_ip}")
