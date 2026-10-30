@@ -7,6 +7,9 @@
     {% else %}
         <title>WestBroadcast Encoder</title>
     {% endif %}
+    <script>
+        const APP_LANG = "{{ lang | default('en') }}";
+    </script>
     <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
     {% if logged_in %}
     <script src="{{ url_for('static', filename='vue3.js') }}"></script>
@@ -264,8 +267,13 @@
                 {% endif %}
             </div>
             <form method="POST" action="/">
+                {% if lang == 'fr' %}
+                <input type="password" name="password" class="form-control mb-3" placeholder="Mot de passe" required>
+                <button class="btn btn-primary w-100" type="submit">Connexion</button>
+                {% else %}
                 <input type="password" name="password" class="form-control mb-3" placeholder="Password" required>
                 <button class="btn btn-primary w-100" type="submit">Login</button>
+                {% endif %}
                 {% if error %}<p class="text-danger mt-2 text-center"><b>{{ error }}</b></p>{% endif %}
             </form>
         </div>
@@ -332,6 +340,7 @@
                     <li class="nav-item"><a class="nav-link" :class="{active: tab=='streams'}" @click.prevent="switchTab('streams')" href="#">Streams ({{ config.streams.length }})</a></li>
                     <li class="nav-item"><a class="nav-link" :class="{active: tab=='settings'}" @click.prevent="switchTab('settings')" href="#">General Settings</a></li>
                     <li class="nav-item"><a class="nav-link" :class="{active: tab=='smtp'}" @click.prevent="switchTab('smtp')" href="#">SMTP Settings</a></li>
+                    <li class="nav-item ms-auto"><span class="nav-link disabled text-muted border-0 bg-transparent" style="cursor: default; font-weight: bold;">Version 1.3</span></li>
                 </ul>
 
                 <!-- DASHBOARD TAB -->
@@ -782,6 +791,13 @@
                                 </div>
                                 <div class="settings-body">
                                     <div class="mb-4 border-bottom pb-3">
+                                        <label class="form-label text-muted fw-bold mb-1">Interface Language</label>
+                                        <select v-model="config.settings.language" class="form-select">
+                                            <option value="en">English</option>
+                                            <option value="fr">Français</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-4 border-bottom pb-3">
                                         <div class="d-flex justify-content-between align-items-center mb-3 bg-light p-2 rounded border">
                                             <span class="fw-bold text-dark">Fraunhofer FDK library for AAC encoding:</span>
                                             <span v-if="fdk_installed" class="badge bg-success fs-6 shadow-sm">DETECTED</span>
@@ -1092,10 +1108,12 @@
         }
 
         const app = Vue.createApp({
-            data() {
-                return {
-                    toast: { show: false, message: '' },
-                    tab: 'dashboard',
+    data() {
+        const savedTab = sessionStorage.getItem('active_tab');
+        if (savedTab) sessionStorage.removeItem('active_tab');
+        return {
+            toast: { show: false, message: '' },
+            tab: savedTab || 'dashboard',
                     activeStreamIndex: 0,
                     showStreamPassword: false, 
                     showAdminPassword: false,
@@ -1103,7 +1121,7 @@
                     lastSwapTime: 0,
                     draggedServerIndex: null,
                     lastServerSwapTime: 0,
-                    config: { servers: [], streams: [], settings: {smtp:{recipients:["","","",""]}}, audio_devices_list: [] },
+                    config: { servers: [], streams: [], settings: {language: 'en', smtp:{recipients:["","","",""]}}, audio_devices_list: [] },
                     originalStreamsJson: '[]',
                     originalServersJson: '[]', 
                     originalSettingsJson: '{}',
@@ -1203,6 +1221,13 @@
                 }
             },
             mounted() {
+                if (sessionStorage.getItem('scroll_to_top')) {
+                    sessionStorage.removeItem('scroll_to_top');
+                    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+                    window.scrollTo(0, 0);
+                    setTimeout(() => window.scrollTo(0, 0), 50);
+                }
+
                 window.addEventListener('beforeunload', (e) => {
                     if (this.hasUnsavedChanges) {
                         e.preventDefault();
@@ -1338,6 +1363,13 @@
                 loadConfig() {
                     fetch('/api/config').then(r => r.json()).then(data => {
                         this.config = data;
+                        if (APP_LANG === 'fr' && this.config.streams) {
+                            this.config.streams.forEach(s => {
+                                if (s.description === 'Encoded with WestBroadcast Encoder') {
+                                    s.description = 'Encodé avec WestBroadcast Encoder';
+                                }
+                            });
+                        }
                         this.originalStreamsJson = JSON.stringify(data.streams || []);
                         this.originalServersJson = JSON.stringify(data.servers || []);
                         this.originalSettingsJson = JSON.stringify(data.settings || {});
@@ -1421,10 +1453,17 @@
                             }, 5000);
                         } else {
                             if (form) form.classList.remove('was-validated');
+                            const langChanged = (this.config.settings && this.config.settings.language && typeof APP_LANG !== 'undefined' && this.config.settings.language !== APP_LANG);
                             this.originalStreamsJson = JSON.stringify(this.config.streams || []);
                             this.originalServersJson = JSON.stringify(this.config.servers || []);
                             this.originalSettingsJson = JSON.stringify(this.config.settings || {});
                             this.originalPasswordJson = JSON.stringify(this.config.password || '');
+                            if (langChanged) {
+                                sessionStorage.setItem('active_tab', 'settings');
+                                sessionStorage.setItem('scroll_to_top', '1');
+                                window.location.reload();
+                                return;
+                            }
                             if (!silent) this.showNotification("Configuration saved successfully!"); 
                             this.loadConfig(); 
                         }
@@ -1593,7 +1632,7 @@
                     let stId = 'st_' + Date.now();
                     this.config.streams.push({ 
                         id: stId, name: sName, auto_start: false, audio_device: '', format: 'mp3', bitrate: '128k', mount: '/stream', user: 'source', password: '', targets: [], 
-                        meta_source: 'none', meta_file_path: '', meta_http_url: '', meta_http_interval: 7, meta_custom_id: 'my-radio-station', meta_post_key: '', meta_fixed_text: '', radio_name: sName, description: 'Encoded with WestBroadcast Encoder', genre: '', gain: '0', sample_rate: '48000', channels: '2', bit_depth: '0', audio_delay: '0.000', meta_delay: 0,
+                        meta_source: 'none', meta_file_path: '', meta_http_url: '', meta_http_interval: 7, meta_custom_id: 'my-radio-station', meta_post_key: '', meta_fixed_text: '', radio_name: sName, description: (APP_LANG === 'fr' ? 'Encodé avec WestBroadcast Encoder' : 'Encoded with WestBroadcast Encoder'), genre: '', gain: '0', sample_rate: '48000', channels: '2', bit_depth: '0', audio_delay: '0.000', meta_delay: 0,
                         loss_threshold_db: -45.0, loss_timeout_sec: 10.0, recovery_threshold_db: -35.0, recovery_timeout_sec: 5.0, alert_silent: false, alert_unreachable: false, unreachable_timeout_sec: 15.0
                     });
                     this.activeStreamIndex = this.config.streams.length - 1;
@@ -1667,5 +1706,359 @@
         {% endraw %}
     {% endif %}
 
+<script>
+    const fr_dict = {
+        "Dashboard": "Tableau de bord",
+        "Servers": "Serveurs",
+        "Streams": "Flux",
+        "General Settings": "Paramètres généraux",
+        "SMTP Settings": "Paramètres SMTP",
+        "Start All Streams": "Démarrer tous les flux",
+        "Stop All Streams": "Arrêter tous les flux",
+        "Logout": "Déconnexion",
+        "Failed to Connect": "Échec de connexion",
+        "Connecting...": "Connexion...",
+        "Online": "En ligne",
+        "Offline": "Hors ligne",
+        "Stopped": "Arrêté",
+        "Unavailable": "Indisponible",
+        "Unsupported by this codec": "Non supporté par ce codec",
+        "Disabled": "Désactivé",
+        "Waiting for metadata...": "En attente de métadonnées...",
+        "None": "Aucun",
+        "Start": "Démarrer",
+        "Stop": "Arrêter",
+        "No stream have been set up yet. Go to the \"Streams\" tab to create one.": "Aucun flux n'a été configuré. Allez dans l'onglet \"Flux\" pour en créer un.",
+        "Add New Streaming Server": "Ajouter un serveur",
+        "Save Configuration": "Enregistrer la configuration",
+        "Server Name": "Nom du serveur",
+        "Server Type": "Type de serveur",
+        "Icecast 2": "Icecast 2",
+        "Built-in HTTP Server": "Serveur HTTP interne",
+        "RTP (Pure / SDP)": "RTP (Pur / SDP)",
+        "RTP (MPEG-TS)": "RTP (MPEG-TS)",
+        "IP / Domain": "IP / Domaine",
+        "Port": "Port",
+        "Add New Stream": "Ajouter un flux",
+        "Save Configuration for All Streams": "Enregistrer tous les flux",
+        "Unnamed": "Sans nom",
+        "No Stream Selected": "Aucun flux sélectionné",
+        "Rename": "Renommer",
+        "Delete Stream": "Supprimer le flux",
+        "Cannot delete: The stream is currently being encoded": "Suppression impossible : Le flux est en cours d'encodage",
+        "Auto-start this stream on software boot": "Démarrer automatiquement ce flux au lancement du logiciel",
+        "Audio Settings": "Paramètres Audio",
+        "Audio Device": "Périphérique audio",
+        "Codec": "Codec",
+        "Bitrate": "Débit",
+        "Sample Rate": "Fréquence d'échantillonnage",
+        "Bit Depth (Bits)": "Profondeur de bits",
+        "Stereo / Mono": "Stéréo / Mono",
+        "Mono": "Mono",
+        "Stereo": "Stéréo",
+        "Gain (dB)": "Gain (dB)",
+        "Audio Latency (Seconds)": "Latence audio (Secondes)",
+        "Stream Metadata (For Icecast and Internal Servers)": "Métadonnées du flux (Icecast et serveurs internes)",
+        "Public Stream Name": "Nom public du flux",
+        "Public Stream Description": "Description publique",
+        "Genre": "Genre",
+        "\"Currently Playing\" Metadata Source": "Source des métadonnées pour le titrage (Information \"En cours de lecture\")",
+        "Local Text File": "Fichier texte local",
+        "HTTP/HTTPS URL": "URL HTTP/HTTPS",
+        "POST function from automation software": "Fonction POST depuis un logiciel d'automation",
+        "Fixed Text": "Texte fixe prédéfini",
+        "Local file path:": "Chemin du fichier local :",
+        "URL to fetch metadata from:": "URL sur laquelle se situent les métadonnées à récupérer :",
+        "Update interval (seconds):": "Intervalle de mise à jour (en secondes) :",
+        "Custom ID (Station Name):": "ID personnalisé (Nom de la station) :",
+        "Security Key (Optional):": "Clé de sécurité (Valeur optionnelle) :",
+        "Use the following settings in your automation software (e.g. RadioDJ) to establish a connection with the encoder:": "Indiquez les valeurs suivantes dans la configuration de votre logiciel d'automation pour établir la connexion avec l'encodeur :",
+        "Indicate the custom text you want to display in the metadata:": "Indiquez le texte personnalisé à afficher dans les métadonnées :",
+        "Delay (in seconds) for sending metadata to the stream:": "Délai d'envoi des métadonnées (en secondes) :",
+        "Authentication & Destinations": "Authentification & Destinations",
+        "Mount Point": "Point de montage",
+        "Source Username": "Nom d'utilisateur source",
+        "Source Password": "Mot de passe source",
+        "Broadcast this stream to the following server(s):": "Diffuser ce flux sur les serveurs suivants :",
+        "Silence & Connection Alerts": "Envoi d'alertes Silence & Connexion",
+        "Send an email alert if the stream is silent": "Envoyer une alerte par mail si le flux est silencieux",
+        "Loss Threshold (dB)": "Seuil de perte (dB)",
+        "Loss Timeout (seconds)": "Délai de perte (secondes)",
+        "Recovery Threshold (dB)": "Seuil de rétablissement (dB)",
+        "Recovery Timeout (seconds)": "Délai de rétablissement (secondes)",
+        "Send an email alert if one of the selected streaming servers is unreachable (Connection lost)": "Envoyer une alerte par mail si un serveur est injoignable (Connexion perdue)",
+        "Timeout before alert (seconds)": "Délai avant alerte (secondes)",
+        "Global Preferences": "Préférences Globales",
+        "Fraunhofer FDK library for AAC encoding:": "Bibliothèque Fraunhofer FDK (Encodage AAC) :",
+        "DETECTED": "DÉTECTÉE",
+        "Missing": "Manquante",
+        "Instance Name (Optional)": "Nom de l'instance (Optionnel)",
+        "Hide instance name on Login page": "Masquer le nom de l'instance sur la page de connexion",
+        "Interface Language": "Langage de l'interface",
+        "Interface Theme": "Thème de l'interface",
+        "Light Mode": "Mode Clair",
+        "Dark Mode": "Mode Sombre",
+        "Admin Password (Webserver Login)": "Mot de passe Admin (Connexion Web)",
+        "Webserver Port": "Port du serveur web",
+        "(Will trigger an automatic server restart if modified)": "(Occasionnera un redémarrage du serveur si modifié)",
+        "Automatic reconnection timeout to streaming servers (in seconds)": "Délai de reconnexion automatique aux serveurs (secondes)",
+        "Enable CPU/RAM Monitoring": "Activer la surveillance CPU/RAM",
+        "System Management": "Gestion du Système",
+        "View System and Authentication Logs": "Voir les journaux système et d'authentification",
+        "Export Configuration": "Exporter la configuration",
+        "Import Configuration": "Importer une configuration",
+        "Restart": "Redémarrer",
+        "Factory Reset": "Réinitialisation d'usine",
+        "SMTP Configuration": "Configuration SMTP",
+        "Configure this service if you want to receive email alerts in the event of silent streams or unreachable streaming servers.": "Configurez ce service si vous souhaitez recevoir des alertes par mail en cas de flux silencieux ou serveurs injoignables.",
+        "Enable SMTP Service": "Activer le service SMTP",
+        "Sender Account Configuration": "Configuration du compte expéditeur",
+        "SMTP Host": "Hôte SMTP",
+        "SMTP Port": "Port SMTP",
+        "SMTP Username": "Nom d'utilisateur SMTP",
+        "SMTP Password": "Mot de passe SMTP",
+        "Sender Email": "Adresse mail de l'expéditeur",
+        "Use TLS Protocol": "Utiliser le protocole TLS",
+        "Interval between alert emails (minutes):": "Intervalle entre les mails d'alerte (minutes) :",
+        "Recipients": "Destinataires",
+        "Email 1": "Adresse mail 1",
+        "Email 2": "Adresse mail 2",
+        "Email 3": "Adresse mail 3",
+        "Email 4": "Adresse mail 4",
+        "Send Test Email": "Envoyer un mail de test",
+        "Please save your configuration before testing!": "Veuillez enregistrer votre configuration avant d'effectuer un test !",
+        "System and Authentication Logs": "Journaux Système & Authentification",
+        "All Events": "Tous",
+        "Info": "Info",
+        "Warnings": "Avertissements",
+        "Errors": "Erreurs",
+        "System": "Système",
+        "Auth": "Authentification",
+        "Refresh": "Actualiser",
+        "Export all events to text file": "Exporter vers un fichier texte",
+        "Clear": "Effacer",
+        "Timestamp": "Horodatage",
+        "Type": "Type",
+        "Event": "Événement",
+        "Close": "Fermer",
+        "Missing Component": "Composant Manquant",
+        "The library required for encoding AAC-LC and HE-AAC V1/V2 streams is not present on the host machine.": "La bibliothèque requise pour encoder en AAC n'est pas présente sur la machine hôte.",
+        "The Fraunhofer FDK AAC library (libfdk-aac.dll) must be downloaded.": "La bibliothèque Fraunhofer FDK (libfdk-aac.dll) doit être téléchargée.",
+        "This engine offers professional audio quality, infinitely richer and more precise than standard encoders. For legal reasons, it is not possible to include it directly in this project.": "Ce moteur offre une qualité audio professionnelle. Pour des raisons légales, elle n'est pas incluse directement.",
+        "You have two options to obtain this library:": "Vous avez deux options pour obtenir cette bibliothèque :",
+        "Automatic download:": "Téléchargement automatique :",
+        "Click the button below to download the DLL.": "Cliquez sur le bouton ci-dessous pour télécharger la DLL.",
+        "Manual download:": "Téléchargement manuel :",
+        "Download it yourself from the source of your choice, place it in the encoder folder, and rename it strictly to ": "Téléchargez-la vous-même, placez-la dans le dossier de l'encodeur et renommez-la en ",
+        "Configuration saved successfully!": "Configuration enregistrée avec succès !",
+        "Configuration imported successfully!": "Configuration importée avec succès !",
+        "Please correct the invalid fields highlighted in red before saving.": "Veuillez corriger les champs invalides en rouge avant d'enregistrer.",
+        "Are you sure you want to clear all logs?": "Êtes-vous sûr de vouloir effacer tous les journaux ?",
+        "Are you sure you want to restart the encoder?\n\nThis will interrupt all your streams if they are being encoded!": "Êtes-vous sûr de vouloir redémarrer l'encodeur ?\n\nCela interrompra tous vos flux en cours d'encodage !",
+        "Are you sure you want to RESTORE the encoder to factory settings?\n\nThis operation will DELETE your current configuration and cannot be undone!": "Êtes-vous sûr de vouloir RESTAURER l'encodeur aux paramètres d'usine ?\n\nCette opération SUPPRIMERA votre configuration actuelle et est irréversible !",
+        "Are you sure you want to delete this server?": "Êtes-vous sûr de vouloir supprimer ce serveur ?",
+        "Are you sure you want to delete this stream?": "Êtes-vous sûr de vouloir supprimer ce flux ?",
+        "Indicate a name for the new stream:": "Indiquez un nom pour le nouveau flux :",
+        "Enter new name for the stream:": "Indiquer le nouveau nom du flux :",
+        "My New Stream": "Mon Nouveau Flux",
+        "Example: My Encoder": "Exemple : Mon Encodeur",
+        "Example: My Stream": "Exemple : Mon Flux",
+        "Your public stream description goes here": "Votre description publique ici",
+        "Pop, Rock, ...": "Pop, Rock, ...",
+        "Example: C:\\NowPlaying.txt": "Exemple : C:\\EnCoursDeLecture.txt",
+        "Example: https://www.myradiostation.com/current-song.php": "Exemple : https://www.maradio.com/titre.php",
+        "Example: The Best 80s Music Radio Station!": "Exemple : Toute l'actualité locale et le meilleur des années 80 !",
+        "Example: smtp.myradiostation.com": "Exemple : smtp.maradio.com",
+        "Example: alerts@myradiostation.com": "Exemple : alertes@maradio.com",
+        "Example: engineer@myradiostation.com": "Exemple : technicien@maradio.com",
+        "Page": "Page",
+        "Lossless": "Sans perte",
+        
+        // Emojis inclus pour assurer la traduction stricte
+        "🟡 Connecting...": "🟡 Connexion...",
+        "🟢 Online": "🟢 En ligne",
+        "🔴 Offline": "🔴 Hors ligne",
+        "⏱ Uptime:": "⏱ En ligne depuis :",
+        "🎵 Title:": "🎵 Titre :",
+        "🔤 Sort streams alphabetically": "🔤 Trier par ordre alphabétique",
+        "⬇️ Download SDP File": "⬇️ Télécharger le fichier SDP",
+        "✏️ Rename": "✏️ Renommer",
+        "⚠️ \"Currently Playing\" metadata injection is not supported for FLAC and OGG Opus.": "⚠️ L'injection de métadonnées \"En cours de lecture\" n'est pas supportée pour le FLAC et l'OGG Opus.",
+        "Backend started.": "Backend démarré.",
+        "libfdk-aac.dll installed successfully!" : "libfdk-aac.dll installé avec succès !",
+
+        // Traductions complémentaires
+        "Error: ": "Erreur : ",
+        "Encoded with WestBroadcast Encoder": "Encodé avec WestBroadcast Encoder",
+        "Unknown": "Inconnu",
+        "No audio devices found. Make sure the software has the necessary permissions to detect the devices.": "Aucun périphérique audio trouvé. Assurez-vous que le logiciel dispose des autorisations.",
+        "Configuration export failed: File not found or inaccessible.": "L'exportation a échoué : fichier introuvable ou inaccessible.",
+        "Invalid file format. JSON required.": "Format de fichier invalide. Fichier JSON requis.",
+        "Unable to send a test email: The service is not configured.\n\nIf you have just made the configuration, make sure you have saved it before running a test.": "Impossible d'envoyer un mail de test : Le service n'est pas configuré.\n\nSi vous venez d'effectuer la configuration, assurez-vous de l'avoir enregistrée.",
+        "No recipients configured.": "Aucun destinataire configuré.",
+        "Invalid Key": "Clé invalide",
+        "Unknown ID": "ID inconnu",
+        "Empty content": "Contenu vide",
+        "Unauthorized": "Non autorisé",
+        "Delete Server": "Supprimer le serveur",
+        "Rename stream": "Renommer le flux",
+        "Drag to reorder": "Glisser pour réordonner",
+        "Unsaved changes": "Modifications non enregistrées",
+        "Unsaved modifications": "Modifications non enregistrées",
+        "Show/Hide password": "Afficher/Masquer le mot de passe",
+        "Click here for more details, and to install the library": "Cliquez ici pour plus de détails et pour installer la bibliothèque"
+    };
+
+    const fr_regex = [
+        { rx: /Streams \((\d+)\)/, rep: "Flux ($1)" },
+        { rx: /Servers \((\d+)\)/, rep: "Serveurs ($1)" },
+        { rx: /Page (\d+) \/ (\d+)/, rep: "Page $1 / $2" },
+        { rx: /L: ([\-\d\.]+) dB/, rep: "G : $1 dB" },
+        { rx: /R: ([\-\d\.]+) dB/, rep: "D : $1 dB" },
+        { rx: /(\d+) days, (\d+)h (\d+)m (\d+)s/, rep: "$1 jours, $2h $3m $4s" },
+        { rx: /(\d+) Listeners/, rep: "$1 Auditeurs" },
+        { rx: /(\d+) Listener/, rep: "$1 Auditeur" },
+        { rx: /👥 (\d+) Listener/, rep: "👥 $1 Auditeur" },
+        { rx: /👥 (\d+) Listeners/, rep: "👥 $1 Auditeurs" },
+        { rx: /Uptime: (.+)/, rep: "Durée de fonctionnement : $1" },
+        { rx: /^Error: ([\s\S]+)/, rep: "Erreur : $1" },
+        
+        // Logs Backend et erreurs UI rétroactives
+        { rx: /Stream "(.+)" started\./, rep: "Flux \"$1\" démarré." },
+        { rx: /Stream "(.+)" stopped\./, rep: "Flux \"$1\" arrêté." },
+        { rx: /Webserver port changed from (\d+) to (\d+)\. Restarting system\.\.\./, rep: "Port du serveur web modifié de $1 vers $2. Redémarrage du système..." },
+        { rx: /Configuration saved\./, rep: "Configuration enregistrée." },
+        { rx: /Stream "(.+)" stopped \(deleted\)\./, rep: "Flux \"$1\" arrêté (supprimé)." },
+        { rx: /Stream "(.+)" updated and restarted\./, rep: "Flux \"$1\" mis à jour et redémarré." },
+        { rx: /Stream "(.+)" updated\./, rep: "Flux \"$1\" mis à jour." },
+        { rx: /Stream "(.+)" created and started\./, rep: "Flux \"$1\" créé et démarré." },
+        { rx: /Logs cleared by user\./, rep: "Journaux effacés par l'utilisateur." },
+        { rx: /System restart requested\./, rep: "Redémarrage du système demandé." },
+        { rx: /Factory reset requested\./, rep: "Réinitialisation d'usine demandée." },
+        { rx: /Configuration imported\. Restarting backend\.\.\./, rep: "Configuration importée. Redémarrage du backend..." },
+        { rx: /SMTP Test email sent successfully\./, rep: "Mail de test SMTP envoyé avec succès." },
+        { rx: /libfdk-aac\.dll was downloaded and installed successfully\./, rep: "libfdk-aac.dll a été téléchargé et installé avec succès." },
+        { rx: /Stream "(.+)" started automatically\./, rep: "Flux \"$1\" démarré automatiquement." },
+        { rx: /Streaming server "(.+)" is unreachable\. Attempting to reconnect\./, rep: "Le serveur de streaming \"$1\" est injoignable. Tentative de reconnexion." },
+        { rx: /Connection to streaming server "(.+)" has been restored\./, rep: "La connexion au serveur de streaming \"$1\" a été rétablie." },
+        { rx: /Stream "(.+)": Capturing at (\d+)Hz/, rep: "Flux \"$1\" : Capture à $2Hz" },
+        { rx: /Stream "(.+)": Configured rate (\d+)Hz not supported, falling back to (\d+)Hz/, rep: "Flux \"$1\" : Fréquence $2Hz non supportée, basculement vers $3Hz" },
+        { rx: /Stream "(.+)" crashed at startup\./, rep: "Le flux \"$1\" a planté au démarrage." },
+        { rx: /Silence detected on "(.+)"\./, rep: "Silence détecté sur \"$1\"." },
+        { rx: /Stream "(.+)" is no longer silent\./, rep: "Le flux \"$1\" n'est plus silencieux." },
+        { rx: /Successful login from IP (.+)/, rep: "Connexion réussie depuis l'IP $1" },
+        { rx: /Failed login attempt from IP (.+)/, rep: "Tentative de connexion échouée depuis l'IP $1" },
+        { rx: /SMTP Test failed: (.+)/, rep: "Échec du test SMTP : $1" },
+        { rx: /Failed to download libfdk-aac\.dll: (.+)/, rep: "Échec du téléchargement de libfdk-aac.dll : $1" },
+        { rx: /SMTP Error: (.+)/, rep: "Erreur SMTP : $1" },
+        { rx: /Audio input error: ([\s\S]+)/, rep: "Erreur d'entrée audio : $1" },
+        
+        // Alertes JS et Tooltips dynamiques
+        { rx: /⚠️ Missing Destination![\s\S]*No destination is selected for the stream:[\s\S]*"([\s\S]*?)"[\s\S]*Please select at least one server destination before saving\./, rep: "⚠️ Destination manquante !\n\nAucune destination n'est sélectionnée pour le flux :\n\"$1\"\n\nVeuillez sélectionner au moins un serveur de destination avant d'enregistrer." },
+        { rx: /⚠️ You have modified the configuration of one or more RUNNING streams \/ servers\.[\s\S]*Click "OK" to continue, or "Cancel"\./, rep: "⚠️ Vous avez modifié la configuration d'un ou plusieurs flux / serveurs EN COURS D'EXÉCUTION.\n\nEnregistrer ces modifications interrompra temporairement l'encodage des flux concernés.\n\nCliquez sur \"OK\" pour continuer, ou \"Annuler\"." },
+        { rx: /⚠️ You are about to leave this page while changes are pending\.[\s\S]*If you continue, these changes will not be saved\./, rep: "⚠️ Vous êtes sur le point de quitter cette page alors que des modifications sont en attente.\n\nSi vous continuez, ces modifications ne seront pas enregistrées." },
+        { rx: /Allows you to increase or decrease the audio gain[\s\S]*/, rep: "Permet d'augmenter ou de réduire le gain audio.\n\nPour réduire le gain, utilisez le signe négatif \"-\" avant la valeur (Exemple : -2.0).\n\nPour augmenter le gain, indiquez la valeur sans signe (Exemple : 3.0)." },
+        { rx: /Allows you to add a delay between the audio output and the encoding[\s\S]*/, rep: "Permet d'ajouter un délai entre l'entrée audio et l'encodage du flux.\n\nCe paramètre est utile si vous souhaitez synchroniser votre flux avec un autre." },
+        { rx: /This setting is only required for broadcasting to an Icecast server\.[\s\S]*Be sure to include the \/ before[\s\S]*/, rep: "Ce paramètre n'est requis que pour la diffusion vers un serveur Icecast.\n\nAssurez-vous d'inclure le / avant le nom de votre point de montage\n(Exemple : /stream)." },
+        { rx: /This setting is only required for broadcasting to an Icecast server\.[\s\S]*username configured on the Icecast server[\s\S]*/, rep: "Ce paramètre n'est requis que pour la diffusion vers un serveur Icecast.\n\n\Indiquez le nom d'utilisateur \"source\" configuré sur le serveur Icecast pour authentifier la connexion entre l'encodeur et le serveur." },
+        { rx: /This setting is only required for broadcasting to an Icecast server\.[\s\S]*password configured on the Icecast server[\s\S]*/, rep: "Ce paramètre n'est requis que pour la diffusion vers un serveur Icecast.\n\n\Indiquez le mot de passe \"source\" configuré sur le serveur Icecast pour authentifier la connexion entre l'encodeur et le serveur." },
+        { rx: /Alert emails are sent via the SMTP service\.[\s\S]*/, rep: "Les mails d'alerte sont envoyés via le service SMTP.\n\nAssurez-vous d'avoir configuré ce service avec les informations requises pour que cette option fonctionne correctement." },
+        { rx: /When the audio level is below this value[\s\S]*/, rep: "Lorsque le niveau audio se trouve en dessous de cette valeur, le flux est considéré comme silencieux." },
+        { rx: /Number of seconds before confirming that the stream is silent[\s\S]*/, rep: "Nombre de secondes avant de confirmer que le flux est silencieux, ce qui déclenchera l'envoi d'un mail d'alerte." },
+        { rx: /When the audio level is above this value[\s\S]*/, rep: "Lorsque le niveau audio se trouve au dessus de cette valeur, le flux est considéré comme rétabli." },
+        { rx: /Number of seconds before confirming that the stream is functional again[\s\S]*/, rep: "Nombre de secondes avant de confirmer que le flux est rétabli, ce qui déclenchera l'envoi d'une notification par mail." },
+        { rx: /Number of seconds to wait before sending an alert email[\s\S]*/, rep: "Nombre de secondes à attendre avant d'envoyer un mail d'alerte.\n\nSi la connexion au serveur de streaming est rétablie avant ce délai, le mail d'alerte ne sera pas envoyé." },
+        { rx: /If the connection to the streaming server is lost[\s\S]*/, rep: "Si la connexion au serveur de streaming est perdue, l'encodeur attendra le nombre de secondes spécifié avant de tenter de se reconnecter.\n\nLes tentatives de reconnexion s'effectueront en boucle jusqu'au rétablissement de la connexion." },
+        { rx: /When enabled, this feature allows you to monitor the host computer's CPU[\s\S]*/, rep: "Lorsque cette option est activée, l'utilisation CPU et RAM de la machine hôte peut être surveillée en temps réel via un indicateur situé en haut à droite de l'interface.\n\nLes valeurs sont actualisées toutes les 10 secondes." },
+        { rx: /The encoder is restarting\.\.\. You will be redirected in 5 seconds\./, rep: "L'encodeur redémarre... Vous serez redirigé dans 5 secondes." },
+        { rx: /Port modified!/, rep: "Port modifié !" },
+        { rx: /⚠️ Failed to Connect([\s\S]*)/, rep: "⚠️ Échec de connexion$1" },
+        { rx: /Network error: ([\s\S]+)/, rep: "Erreur réseau : $1" },
+        { rx: /Download failed: ([\s\S]+)/, rep: "Échec du téléchargement : $1" },
+        { rx: /⚠️ CONNECTION ERROR DETAILS\n\n([\s\S]+)/, rep: "⚠️ DÉTAILS DE L'ERREUR DE CONNEXION\n\n$1" }
+    ];
+
+    let translate = (text) => text;
+
+    if (APP_LANG === 'fr') {
+        translate = (text) => {
+            if(!text) return text;
+            let t = text.trim();
+            if(t === "") return text;
+            
+            if(fr_dict[t]) return text.replace(t, fr_dict[t]);
+            
+            for(let i=0; i<fr_regex.length; i++) {
+                if(fr_regex[i].rx.test(t)) {
+                    return text.replace(t, t.replace(fr_regex[i].rx, fr_regex[i].rep));
+                }
+            }
+            
+            for(let key in fr_dict) {
+                if(t.startsWith(key) && key.length > 10) {
+                    return text.replace(key, fr_dict[key]);
+                }
+            }
+            return text;
+        };
+
+        const originalAlert = window.alert;
+        window.alert = function(msg) { originalAlert(translate(msg)); };
+        const originalConfirm = window.confirm;
+        window.confirm = function(msg) { return originalConfirm(translate(msg)); };
+        
+        // Interception spécifique de la boîte de dialogue prompt
+        const originalPrompt = window.prompt;
+        window.prompt = function(msg, def) { return originalPrompt(translate(msg), translate(def)); };
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const translateNode = (node) => {
+                if(node.nodeType === Node.TEXT_NODE) {
+                    let replaced = translate(node.nodeValue);
+                    if(replaced !== node.nodeValue) node.nodeValue = replaced;
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null, false);
+                    let childNode;
+                    while(childNode = walker.nextNode()) {
+                        let replaced = translate(childNode.nodeValue);
+                        if(replaced !== childNode.nodeValue) childNode.nodeValue = replaced;
+                    }
+                    
+                    const checkTooltips = (el) => {
+                        if (el.hasAttribute && el.hasAttribute('title')) {
+                            let replaced = translate(el.getAttribute('title'));
+                            if(replaced !== el.getAttribute('title')) el.setAttribute('title', replaced);
+                        }
+                        if (el.hasAttribute && el.hasAttribute('data-title')) {
+                            let replaced = translate(el.getAttribute('data-title'));
+                            if(replaced !== el.getAttribute('data-title')) el.setAttribute('data-title', replaced);
+                        }
+                    };
+                    checkTooltips(node);
+                    node.querySelectorAll('[title], [data-title]').forEach(checkTooltips);
+                    node.querySelectorAll('input[placeholder], textarea[placeholder]').forEach(el => {
+                        let replaced = translate(el.placeholder);
+                        if(replaced !== el.placeholder) el.placeholder = replaced;
+                    });
+                    node.querySelectorAll('input[type="button"], input[type="submit"], button').forEach(el => {
+                        if(el.innerText) {
+                            let replaced = translate(el.innerText);
+                            if(replaced !== el.innerText) el.innerText = replaced;
+                        }
+                    });
+                }
+            };
+
+            translateNode(document.body);
+
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach(mutation => {
+                    mutation.addedNodes.forEach(node => translateNode(node));
+                });
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
+    }
+</script>
 </body>
 </html>
