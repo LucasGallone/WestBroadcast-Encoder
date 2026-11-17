@@ -52,6 +52,11 @@ MP3, AAC* (AAC-LC, HE-AAC V1, HE-AAC V2), OGG Opus, OGG Vorbis, FLAC, WAV, and M
 -> This can be done by retrieving the content of a text file, from a HTML page, or by using the POST function in your automation software.
 <br>
 <br>
+• <b>Embedding RDS (UECP) data in MP2 and AAC streams</b>, received over TCP from an RDS encoder.
+<br>
+-> WestBroadcast Streamer (and other UECP-aware receivers) can extract it and forward it to an RDS encoder at the other end. See [RDS (UECP) embedding](#-rds-uecp-embedding) below.
+<br>
+<br>
 • <b>Sending email alerts via SMTP</b> when one of your streams is silent, or the streaming server becomes unavailable.
 > _* AAC encoding requires the Fraunhofer FDK library, which is not included for legal reasons.<br>It can be downloaded directly via the interface or installed manually. Please refer to the Wiki section for details and instructions._
 ## 💬 Available languages
@@ -100,6 +105,19 @@ The default port is 8090 and the default login password is **admin**.
 For the next startups, simply run `Launch.bat` as you did during the initial installation.
 <br>
 At each startup, the script checks that all required dependencies are present on your machine, then starts the audio engine and the webserver.
+## 📡 RDS (UECP) embedding
+MP2 and AAC streams can carry RDS data alongside the audio. Enable **Embed RDS (UECP) data in the audio frames** in the stream's Audio Settings and choose a TCP port (default 9000). The encoder then listens on that port for UECP frames (`0xFE … 0xFF`) from your RDS encoder or playout system, and embeds them in the stream a few bytes per audio frame. The frames aren't parsed or modified.
+<br>
+<br>
+• <b>MP2:</b> up to 8 bytes per frame (about 330 bytes/s at 48 kHz), in the frame's ancillary data: `[UECP bytes, reversed][N][0xFD]` at the end of the frame. These streams are encoded by `mp2_uecp_x64.exe` (libtoolame-dab, psychoacoustic model 2, joint stereo) instead of FFmpeg's MP2 encoder; FFmpeg still prepares the audio and sends the result to every destination as usual.
+<br>
+• <b>AAC (AAC-LC, HE-AAC V1/V2):</b> up to 4 bytes per frame (about 190 bytes/s for AAC-LC at 48 kHz, half that for HE-AAC), in a data stream element (DSE), using the same libfdk-aac.dll. The FDK library only allows ancillary data above 8 kbps per channel, so at very low bitrates there is no room for it; the dashboard shows a warning when that happens.
+<br>
+<br>
+One UECP client is served per port; a new connection replaces the current one. Streams set to the same port receive the same data. If UECP arrives faster than the audio frames can carry it, the oldest waiting frames are dropped (shown on the dashboard) so the delay can't keep growing. This is the same mechanism as UecpSource, and the format WestBroadcast Streamer's UECP forwarding extracts.
+<br>
+<br>
+`mp2_uecp_x64.exe` is built from [`native/mp2_uecp`](native/mp2_uecp) with CMake and Visual Studio (see the comment at the top of its `CMakeLists.txt`).
 ## 💡 Help / Documentation
 Need help configuring the encoder or understanding a specific setting?
 <br>
@@ -127,6 +145,14 @@ This project uses the FFmpeg executable for encoding audio streams.
 <br>
 <br>
 For more details, please refer to the `FFmpeg-LICENSE.txt` file included in this repository.
+- - -
+### libtoolame-dab (MP2 encoder for RDS/UECP embedding)
+`mp2_uecp_x64.exe` is built from [`native/mp2_uecp`](native/mp2_uecp), which includes a modified copy of libtoolame-dab from [ODR-AudioEnc](https://github.com/Opendigitalradio/ODR-AudioEnc).
+<br>
+<br>
+• <b>License:</b> GNU Lesser General Public License (LGPL) v2.1 or later. See `native/mp2_uecp/libtoolame-dab/LGPL.txt`.
+<br>
+• <b>Modifications:</b> listed in `native/mp2_uecp/libtoolame-dab/MODIFICATIONS.md`.
 - - -
 ### Vue.js (JavaScript Framework)
 The `vue3.js` file included in the `/static` folder is part of the Vue.js library.

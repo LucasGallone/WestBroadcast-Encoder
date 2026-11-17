@@ -13,7 +13,7 @@ from flask import Flask, request, jsonify, render_template, session, redirect, s
 from flask_socketio import SocketIO
 import tkinter as tk
 from tkinter import messagebox
-from stream_manager import StreamManager, get_ffmpeg_path
+from stream_manager import StreamManager, get_ffmpeg_path, get_mp2_uecp_path
 
 cli.show_server_banner = lambda *args: None
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
@@ -116,7 +116,11 @@ def load_config():
                     else: st['bit_depth'] = "0"
                 if 'audio_delay' not in st: st['audio_delay'] = "0.000"
                 if 'meta_delay' not in st: st['meta_delay'] = 0
-                
+
+                # RDS (UECP) embedding in MP2 / AAC frames
+                if 'uecp_enabled' not in st: st['uecp_enabled'] = False
+                if 'uecp_port' not in st: st['uecp_port'] = 9000
+
                 # Currently playing metadata configuration
                 if 'meta_source' not in st:
                     if st.get('enable_metadata', False):
@@ -274,6 +278,7 @@ def get_config():
     config['audio_devices_list'] = list_audio_devices() 
     config['local_ip'] = get_local_ip()
     config['fdk_installed'] = os.path.exists(os.path.join(BASE_DIR, "libfdk-aac.dll"))
+    config['mp2_uecp_installed'] = os.path.exists(get_mp2_uecp_path())
     config['system_start_time'] = SYSTEM_START_TIME
     return jsonify(config)
 
