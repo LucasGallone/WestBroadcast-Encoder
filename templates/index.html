@@ -406,17 +406,14 @@
                                             </span>
                                         </div>
 
-                                        <div v-if="getStatus(stream.id).running && getStatus(stream.id).uecp" class="mt-2 pt-1 border-top text-truncate">
+                                        <div v-if="getStatus(stream.id).running && getStatus(stream.id).uecp" class="mt-2 pt-1 border-top">
                                             <strong>📡 RDS (UECP): </strong>
                                             <span v-if="getStatus(stream.id).uecp.warning" class="text-danger fw-bold">Bitrate too low to carry RDS (UECP) data</span>
                                             <template v-else-if="getStatus(stream.id).uecp.client">
-                                                <span class="text-success fw-bold">Connected</span>
-                                                <span class="text-muted">({{ getStatus(stream.id).uecp.client }}) · {{ getStatus(stream.id).uecp.embedded }}</span>
-                                                <span class="text-muted">frames embedded</span>
+                                                <span class="text-success fw-bold">Connected</span>&#32;<span class="text-muted">({{ getStatus(stream.id).uecp.client }}) · {{ getStatus(stream.id).uecp.embedded }}</span>&nbsp;<span class="text-muted">frames embedded</span>
                                             </template>
                                             <template v-else>
-                                                <span class="text-muted fst-italic">Waiting for a UECP client on port</span>
-                                                <span class="text-muted fst-italic">{{ getStatus(stream.id).uecp.port }}</span>
+                                                <span class="text-muted fst-italic">Waiting for a UECP client on port</span>&nbsp;<span class="text-muted fst-italic">{{ getStatus(stream.id).uecp.port }}...</span>
                                             </template>
                                             <span v-if="getStatus(stream.id).uecp.dropped > 0" class="badge bg-warning text-dark ms-1" title="UECP frames dropped because they arrived faster than the audio frames can carry them">⚠️ {{ getStatus(stream.id).uecp.dropped }}</span>
                                         </div>
@@ -1916,6 +1913,7 @@
         "🔴 Offline": "🔴 Hors ligne",
         "⏱ Uptime:": "⏱ En ligne depuis :",
         "🎵 Title:": "🎵 Titre :",
+        "📡 RDS (UECP):": "📡 RDS (UECP) :",
         "🔤 Sort streams alphabetically": "🔤 Trier par ordre alphabétique",
         "⬇️ Download SDP File": "⬇️ Télécharger le fichier SDP",
         "✏️ Rename": "✏️ Renommer",
@@ -1944,7 +1942,7 @@
         "Show/Hide password": "Afficher/Masquer le mot de passe",
         "Click here for more details, and to install the library": "Cliquez ici pour plus de détails et pour installer la bibliothèque",
         "Embed RDS (UECP) data in the audio frames": "Insérer des données RDS (UECP) dans les trames audio",
-        "UECP input TCP port:": "Port TCP à utiliser pour l'entrée UECP :",
+        "UTCP port for the UECP input:": "Port TCP à utiliser pour l'entrée UECP :",
         "MP2: up to 8 bytes per frame, in the ancillary data. The stream is encoded with libtoolame-dab (psychoacoustic model 2) instead of FFmpeg.": "MP2 : jusqu'à 8 octets par trame, dans les données auxiliaires. Le flux est encodé avec libtoolame-dab (modèle psychoacoustique 2) au lieu de FFmpeg.",
         "AAC: up to 4 bytes per frame, in a data stream element (DSE). Very low bitrates leave no room for it.": "AAC : jusqu'à 4 octets par trame dans un élément de données (DSE). Les débits très faibles ne permettent pas d'inclure ces données.",
         "⚠️ mp2_uecp_x64.exe was not found in the encoder folder. It is required to embed RDS (UECP) data in MP2 streams.": "⚠️ mp2_uecp_x64.exe est introuvable dans le dossier de l'encodeur. Cet élément est requis pour insérer les données RDS (UECP) dans les flux MP2.",
@@ -1952,7 +1950,7 @@
         "Connected": "Connecté",
         "frames embedded": "trames insérées",
         "Waiting for a UECP client on port": "En attente d'un client UECP sur le port",
-        "UECP frames dropped because they arrived faster than the audio frames can carry them": "Trames UECP abandonnées car elles arrivent plus vite que les trames audio ne peuvent les transporter"
+        "UECP frames dropped because they arrived faster than the audio frames can carry them.": "Trames UECP ignorées en raison d'un débit supérieur à la capacité de transport des trames audio."
     };
 
     const fr_regex = [
@@ -1999,7 +1997,7 @@
         { rx: /SMTP Error: (.+)/, rep: "Erreur SMTP : $1" },
         { rx: /Audio input error: ([\s\S]+)/, rep: "Erreur d'entrée audio : $1" },
         { rx: /UECP input listening on TCP port (\d+)\./, rep: "Entrée UECP en écoute sur le port TCP $1." },
-        { rx: /UECP client connected from (.+) \(port (\d+)\)\./, rep: "Client UECP connecté depuis $1 (port $2)." },
+        { rx: /UECP client connected from IP (.+) \(port (\d+)\)\./, rep: "Client UECP connecté depuis l'IP $1 (port $2)." },
         { rx: /UECP client (.+) disconnected \(port (\d+)\)\./, rep: "Client UECP $1 déconnecté (port $2)." },
         { rx: /UECP client (.+) replaced by a new connection from (.+) \(port (\d+)\)\./, rep: "Client UECP $1 remplacé par une nouvelle connexion depuis $2 (port $3)." },
         { rx: /Stream "(.+)": bitrate too low to carry RDS \(UECP\) data, it will not be embedded\./, rep: "Flux \"$1\" : débit trop faible pour transporter les données RDS (UECP), elles ne seront pas insérées." },

@@ -183,7 +183,7 @@ class UecpServer:
             conn.settimeout(0.5)
             self.conn = conn
             self.client_addr = addr[0]
-            self._log("INFO", f"UECP client connected from {addr[0]} (port {self.port}).")
+            self._log("INFO", f"UECP client connected from IP {addr[0]} (port {self.port}).")
             threading.Thread(target=self._client_loop, args=(conn, addr[0]), daemon=True).start()
 
     def _client_loop(self, conn, addr):
