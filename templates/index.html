@@ -622,7 +622,7 @@
                                         <span class="ms-2 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon" style="width: 15px; height: 15px; font-size: 0.65rem;" data-title="Listens on a TCP port for UECP frames from an RDS encoder, and embeds them in the stream a few bytes per audio frame: in the ancillary data for MP2, or in a data stream element (DSE) for AAC. &#10;&#10; WestBroadcast Streamer and other UECP-aware receivers can extract them and forward them to an RDS encoder. &#10;&#10; Streams set to the same port receive the same UECP data.">i</span>
                                     </div>
                                     <div v-if="config.streams[activeStreamIndex].uecp_enabled" class="d-flex align-items-center gap-2">
-                                        <label class="small fw-bold text-muted mb-0" style="white-space: nowrap;">UECP input TCP port:</label>
+                                        <label class="small fw-bold text-muted mb-0" style="white-space: nowrap;">TCP port for the UECP input:</label>
                                         <input v-model="config.streams[activeStreamIndex].uecp_port" type="number" min="1" max="65535" class="form-control form-control-sm" style="width: 7em;" placeholder="9000" required>
                                     </div>
                                 </div>
@@ -1943,11 +1943,11 @@
         "Unsaved modifications": "Modifications non enregistrées",
         "Show/Hide password": "Afficher/Masquer le mot de passe",
         "Click here for more details, and to install the library": "Cliquez ici pour plus de détails et pour installer la bibliothèque",
-        "Embed RDS (UECP) data in the audio frames": "Insérer les données RDS (UECP) dans les trames audio",
-        "UECP input TCP port:": "Port TCP d'entrée UECP :",
+        "Embed RDS (UECP) data in the audio frames": "Insérer des données RDS (UECP) dans les trames audio",
+        "UECP input TCP port:": "Port TCP à utiliser pour l'entrée UECP :",
         "MP2: up to 8 bytes per frame, in the ancillary data. The stream is encoded with libtoolame-dab (psychoacoustic model 2) instead of FFmpeg.": "MP2 : jusqu'à 8 octets par trame, dans les données auxiliaires. Le flux est encodé avec libtoolame-dab (modèle psychoacoustique 2) au lieu de FFmpeg.",
-        "AAC: up to 4 bytes per frame, in a data stream element (DSE). Very low bitrates leave no room for it.": "AAC : jusqu'à 4 octets par trame, dans un élément de données (DSE). Les débits très faibles ne laissent pas de place pour ces données.",
-        "⚠️ mp2_uecp_x64.exe was not found in the encoder folder. It is required to embed RDS (UECP) data in MP2 streams.": "⚠️ mp2_uecp_x64.exe est introuvable dans le dossier de l'encodeur. Il est nécessaire pour insérer les données RDS (UECP) dans les flux MP2.",
+        "AAC: up to 4 bytes per frame, in a data stream element (DSE). Very low bitrates leave no room for it.": "AAC : jusqu'à 4 octets par trame dans un élément de données (DSE). Les débits très faibles ne permettent pas d'inclure ces données.",
+        "⚠️ mp2_uecp_x64.exe was not found in the encoder folder. It is required to embed RDS (UECP) data in MP2 streams.": "⚠️ mp2_uecp_x64.exe est introuvable dans le dossier de l'encodeur. Cet élément est requis pour insérer les données RDS (UECP) dans les flux MP2.",
         "Bitrate too low to carry RDS (UECP) data": "Débit trop faible pour transporter les données RDS (UECP)",
         "Connected": "Connecté",
         "frames embedded": "trames insérées",
@@ -2003,7 +2003,7 @@
         { rx: /UECP client (.+) disconnected \(port (\d+)\)\./, rep: "Client UECP $1 déconnecté (port $2)." },
         { rx: /UECP client (.+) replaced by a new connection from (.+) \(port (\d+)\)\./, rep: "Client UECP $1 remplacé par une nouvelle connexion depuis $2 (port $3)." },
         { rx: /Stream "(.+)": bitrate too low to carry RDS \(UECP\) data, it will not be embedded\./, rep: "Flux \"$1\" : débit trop faible pour transporter les données RDS (UECP), elles ne seront pas insérées." },
-        { rx: /Listens on a TCP port for UECP frames from an RDS encoder[\s\S]*/, rep: "Écoute sur un port TCP les trames UECP envoyées par un codeur RDS, et les insère dans le flux, quelques octets par trame audio : dans les données auxiliaires en MP2, ou dans un élément de données (DSE) en AAC.\n\nWestBroadcast Streamer et les autres récepteurs compatibles UECP peuvent les extraire et les transmettre à un codeur RDS.\n\nLes flux réglés sur le même port reçoivent les mêmes données UECP." },
+        { rx: /Listens on a TCP port for UECP frames from an RDS encoder[\s\S]*/, rep: "Écoute, sur un port TCP, les trames UECP envoyées par un codeur RDS et les insère dans le flux sous forme de quelques octets par trame audio : dans les données auxiliaires en MP2, ou dans un élément de données (DSE) en AAC.\n\nWestBroadcast Streamer et les autres récepteurs compatibles UECP peuvent les extraire et les transmettre à un codeur RDS.\n\nLes flux configurés sur le même port reçoivent les mêmes données UECP." },
         
         // Alertes JS et Tooltips dynamiques
         { rx: /⚠️ Missing Destination![\s\S]*No destination is selected for the stream:[\s\S]*"([\s\S]*?)"[\s\S]*Please select at least one server destination before saving\./, rep: "⚠️ Destination manquante !\n\nAucune destination n'est sélectionnée pour le flux :\n\"$1\"\n\nVeuillez sélectionner au moins un serveur de destination avant d'enregistrer." },
@@ -2023,6 +2023,7 @@
         { rx: /If the connection to the streaming server is lost[\s\S]*/, rep: "Si la connexion au serveur de streaming est perdue, l'encodeur attendra le nombre de secondes spécifié avant de tenter de se reconnecter.\n\nLes tentatives de reconnexion s'effectueront en boucle jusqu'au rétablissement de la connexion." },
         { rx: /When enabled, this feature allows you to monitor the host computer's CPU[\s\S]*/, rep: "Lorsque cette option est activée, l'utilisation CPU et RAM de la machine hôte peut être surveillée en temps réel via un indicateur situé en haut à droite de l'interface.\n\nLes valeurs sont actualisées toutes les 10 secondes." },
         { rx: /The encoder is restarting\.\.\. You will be redirected in 5 seconds\./, rep: "L'encodeur redémarre... Vous serez redirigé dans 5 secondes." },
+        { rx: /The encoder is restarting on port (\d+)\. You will be redirected in 5 seconds\./, rep: "L'encodeur redémarre sur le port $1. Vous serez redirigé dans 5 secondes." },
         { rx: /Port modified!/, rep: "Port modifié !" },
         { rx: /⚠️ Failed to Connect([\s\S]*)/, rep: "⚠️ Échec de connexion$1" },
         { rx: /Network error: ([\s\S]+)/, rep: "Erreur réseau : $1" },
