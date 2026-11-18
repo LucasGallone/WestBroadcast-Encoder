@@ -405,7 +405,22 @@
                                                 <span v-else class="text-muted fst-italic">Waiting for metadata...</span>
                                             </span>
                                         </div>
-                                        
+
+                                        <div v-if="getStatus(stream.id).running && getStatus(stream.id).uecp" class="mt-2 pt-1 border-top text-truncate">
+                                            <strong>📡 RDS (UECP): </strong>
+                                            <span v-if="getStatus(stream.id).uecp.warning" class="text-danger fw-bold">Bitrate too low to carry RDS (UECP) data</span>
+                                            <template v-else-if="getStatus(stream.id).uecp.client">
+                                                <span class="text-success fw-bold">Connected</span>
+                                                <span class="text-muted">({{ getStatus(stream.id).uecp.client }}) · {{ getStatus(stream.id).uecp.embedded }}</span>
+                                                <span class="text-muted">frames embedded</span>
+                                            </template>
+                                            <template v-else>
+                                                <span class="text-muted fst-italic">Waiting for a UECP client on port</span>
+                                                <span class="text-muted fst-italic">{{ getStatus(stream.id).uecp.port }}</span>
+                                            </template>
+                                            <span v-if="getStatus(stream.id).uecp.dropped > 0" class="badge bg-warning text-dark ms-1" title="UECP frames dropped because they arrived faster than the audio frames can carry them">⚠️ {{ getStatus(stream.id).uecp.dropped }}</span>
+                                        </div>
+
                                         <!-- Dynamic destinations with overview -->
                                         <div class="mt-2 pt-2 border-top d-flex align-items-center">
                                             <span class="me-2 lh-1" style="font-size: 1.1rem;">🌐</span>
@@ -596,6 +611,27 @@
                                         <span class="ms-1 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon" style="width: 14px; height: 14px; font-size: 0.6rem;" data-title="Allows you to add a delay between the audio output and the encoding of the stream. &#10;&#10; This setting is useful if you want to force your stream to synchronize with another one.">i</span>
                                     </label>
                                     <input v-model="config.streams[activeStreamIndex].audio_delay" type="number" step="0.001" min="0" class="form-control form-control-sm" placeholder="Ex: 1.576">
+                                </div>
+                            </div>
+
+                            <div v-if="['mp2', 'aac', 'aac_lc', 'he_aac', 'he_aac_v2'].includes(config.streams[activeStreamIndex].format)" class="mb-4 bg-white p-3 border rounded shadow-sm">
+                                <div class="d-flex flex-wrap align-items-center gap-3">
+                                    <div class="form-check form-switch mb-0 d-flex align-items-center">
+                                        <input type="checkbox" v-model="config.streams[activeStreamIndex].uecp_enabled" class="form-check-input" :id="'uecp_'+config.streams[activeStreamIndex].id" style="width: 2.2em; height: 1.1em; cursor: pointer; margin-top: 0.1em;">
+                                        <label class="form-check-label fw-bold text-primary ms-2" :for="'uecp_'+config.streams[activeStreamIndex].id" style="cursor: pointer;">Embed RDS (UECP) data in the audio frames</label>
+                                        <span class="ms-2 badge rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center custom-tooltip-icon" style="width: 15px; height: 15px; font-size: 0.65rem;" data-title="Listens on a TCP port for UECP frames from an RDS encoder, and embeds them in the stream a few bytes per audio frame: in the ancillary data for MP2, or in a data stream element (DSE) for AAC. &#10;&#10; WestBroadcast Streamer and other UECP-aware receivers can extract them and forward them to an RDS encoder. &#10;&#10; Streams set to the same port receive the same UECP data.">i</span>
+                                    </div>
+                                    <div v-if="config.streams[activeStreamIndex].uecp_enabled" class="d-flex align-items-center gap-2">
+                                        <label class="small fw-bold text-muted mb-0" style="white-space: nowrap;">UECP input TCP port:</label>
+                                        <input v-model="config.streams[activeStreamIndex].uecp_port" type="number" min="1" max="65535" class="form-control form-control-sm" style="width: 7em;" placeholder="9000" required>
+                                    </div>
+                                </div>
+                                <div v-if="config.streams[activeStreamIndex].uecp_enabled" class="small text-muted mt-2">
+                                    <span v-if="config.streams[activeStreamIndex].format === 'mp2'">MP2: up to 8 bytes per frame, in the ancillary data. The stream is encoded with libtoolame-dab (psychoacoustic model 2) instead of FFmpeg.</span>
+                                    <span v-else>AAC: up to 4 bytes per frame, in a data stream element (DSE). Very low bitrates leave no room for it.</span>
+                                </div>
+                                <div v-if="config.streams[activeStreamIndex].uecp_enabled && config.streams[activeStreamIndex].format === 'mp2' && !config.mp2_uecp_installed" class="alert alert-warning py-2 mt-2 mb-0 small fw-bold">
+                                    ⚠️ mp2_uecp_x64.exe was not found in the encoder folder. It is required to embed RDS (UECP) data in MP2 streams.
                                 </div>
                             </div>
 
@@ -1632,7 +1668,7 @@
                     let stId = 'st_' + Date.now();
                     this.config.streams.push({ 
                         id: stId, name: sName, auto_start: false, audio_device: '', format: 'mp3', bitrate: '128k', mount: '/stream', user: 'source', password: '', targets: [], 
-                        meta_source: 'none', meta_file_path: '', meta_http_url: '', meta_http_interval: 7, meta_custom_id: 'my-radio-station', meta_post_key: '', meta_fixed_text: '', radio_name: sName, description: (APP_LANG === 'fr' ? 'Encodé avec WestBroadcast Encoder' : 'Encoded with WestBroadcast Encoder'), genre: '', gain: '0', sample_rate: '48000', channels: '2', bit_depth: '0', audio_delay: '0.000', meta_delay: 0,
+                        meta_source: 'none', meta_file_path: '', meta_http_url: '', meta_http_interval: 7, meta_custom_id: 'my-radio-station', meta_post_key: '', meta_fixed_text: '', radio_name: sName, description: (APP_LANG === 'fr' ? 'Encodé avec WestBroadcast Encoder' : 'Encoded with WestBroadcast Encoder'), genre: '', gain: '0', sample_rate: '48000', channels: '2', bit_depth: '0', audio_delay: '0.000', meta_delay: 0, uecp_enabled: false, uecp_port: 9000,
                         loss_threshold_db: -45.0, loss_timeout_sec: 10.0, recovery_threshold_db: -35.0, recovery_timeout_sec: 5.0, alert_silent: false, alert_unreachable: false, unreachable_timeout_sec: 15.0
                     });
                     this.activeStreamIndex = this.config.streams.length - 1;
@@ -1906,7 +1942,17 @@
         "Unsaved changes": "Modifications non enregistrées",
         "Unsaved modifications": "Modifications non enregistrées",
         "Show/Hide password": "Afficher/Masquer le mot de passe",
-        "Click here for more details, and to install the library": "Cliquez ici pour plus de détails et pour installer la bibliothèque"
+        "Click here for more details, and to install the library": "Cliquez ici pour plus de détails et pour installer la bibliothèque",
+        "Embed RDS (UECP) data in the audio frames": "Insérer les données RDS (UECP) dans les trames audio",
+        "UECP input TCP port:": "Port TCP d'entrée UECP :",
+        "MP2: up to 8 bytes per frame, in the ancillary data. The stream is encoded with libtoolame-dab (psychoacoustic model 2) instead of FFmpeg.": "MP2 : jusqu'à 8 octets par trame, dans les données auxiliaires. Le flux est encodé avec libtoolame-dab (modèle psychoacoustique 2) au lieu de FFmpeg.",
+        "AAC: up to 4 bytes per frame, in a data stream element (DSE). Very low bitrates leave no room for it.": "AAC : jusqu'à 4 octets par trame, dans un élément de données (DSE). Les débits très faibles ne laissent pas de place pour ces données.",
+        "⚠️ mp2_uecp_x64.exe was not found in the encoder folder. It is required to embed RDS (UECP) data in MP2 streams.": "⚠️ mp2_uecp_x64.exe est introuvable dans le dossier de l'encodeur. Il est nécessaire pour insérer les données RDS (UECP) dans les flux MP2.",
+        "Bitrate too low to carry RDS (UECP) data": "Débit trop faible pour transporter les données RDS (UECP)",
+        "Connected": "Connecté",
+        "frames embedded": "trames insérées",
+        "Waiting for a UECP client on port": "En attente d'un client UECP sur le port",
+        "UECP frames dropped because they arrived faster than the audio frames can carry them": "Trames UECP abandonnées car elles arrivent plus vite que les trames audio ne peuvent les transporter"
     };
 
     const fr_regex = [
@@ -1952,6 +1998,12 @@
         { rx: /Failed to download libfdk-aac\.dll: (.+)/, rep: "Échec du téléchargement de libfdk-aac.dll : $1" },
         { rx: /SMTP Error: (.+)/, rep: "Erreur SMTP : $1" },
         { rx: /Audio input error: ([\s\S]+)/, rep: "Erreur d'entrée audio : $1" },
+        { rx: /UECP input listening on TCP port (\d+)\./, rep: "Entrée UECP en écoute sur le port TCP $1." },
+        { rx: /UECP client connected from (.+) \(port (\d+)\)\./, rep: "Client UECP connecté depuis $1 (port $2)." },
+        { rx: /UECP client (.+) disconnected \(port (\d+)\)\./, rep: "Client UECP $1 déconnecté (port $2)." },
+        { rx: /UECP client (.+) replaced by a new connection from (.+) \(port (\d+)\)\./, rep: "Client UECP $1 remplacé par une nouvelle connexion depuis $2 (port $3)." },
+        { rx: /Stream "(.+)": bitrate too low to carry RDS \(UECP\) data, it will not be embedded\./, rep: "Flux \"$1\" : débit trop faible pour transporter les données RDS (UECP), elles ne seront pas insérées." },
+        { rx: /Listens on a TCP port for UECP frames from an RDS encoder[\s\S]*/, rep: "Écoute sur un port TCP les trames UECP envoyées par un codeur RDS, et les insère dans le flux, quelques octets par trame audio : dans les données auxiliaires en MP2, ou dans un élément de données (DSE) en AAC.\n\nWestBroadcast Streamer et les autres récepteurs compatibles UECP peuvent les extraire et les transmettre à un codeur RDS.\n\nLes flux réglés sur le même port reçoivent les mêmes données UECP." },
         
         // Alertes JS et Tooltips dynamiques
         { rx: /⚠️ Missing Destination![\s\S]*No destination is selected for the stream:[\s\S]*"([\s\S]*?)"[\s\S]*Please select at least one server destination before saving\./, rep: "⚠️ Destination manquante !\n\nAucune destination n'est sélectionnée pour le flux :\n\"$1\"\n\nVeuillez sélectionner au moins un serveur de destination avant d'enregistrer." },

@@ -14,6 +14,7 @@ import socket
 import asyncio
 import numpy as np
 import sounddevice as sd
+import uecp
 from email.message import EmailMessage
 from email.utils import formatdate
 
@@ -222,12 +223,19 @@ def get_ffmpeg_path():
     local_ffmpeg = os.path.join(base_dir, f"ffmpeg{ext}")
     return local_ffmpeg if os.path.exists(local_ffmpeg) else "ffmpeg"
 
+def get_mp2_uecp_path():
+    """MP2 encoder with UECP ancillary data, built from native/mp2_uecp."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    name = "mp2_uecp_x64.exe" if ctypes.sizeof(ctypes.c_void_p) == 8 else "mp2_uecp_x86.exe"
+    return os.path.join(base_dir, name)
+
 # --- MEMORY STRUCTURES FOR THE LIBFDK-AAC DLL ---
-class AACENC_InArgs(ctypes.Structure): 
+class AACENC_InArgs(ctypes.Structure):
     _fields_ = [("numInSamples", ctypes.c_int), ("numAncBytes", ctypes.c_int)]
 
-class AACENC_OutArgs(ctypes.Structure): 
-    _fields_ = [("numOutBytes", ctypes.c_int), ("numInSamples", ctypes.c_int), ("numAncBytes", ctypes.c_int)]
+class AACENC_OutArgs(ctypes.Structure):
+    # fdk-aac 2.x writes all four fields (aacEncEncode clears sizeof(AACENC_OutArgs) on entry)
+    _fields_ = [("numOutBytes", ctypes.c_int), ("numInSamples", ctypes.c_int), ("numAncBytes", ctypes.c_int), ("bitResState", ctypes.c_int)]
 
 class AACENC_BufDesc(ctypes.Structure): 
     _fields_ = [
@@ -247,6 +255,10 @@ class StreamManager:
         
         self.process = None
         self.process_out = None # Used for the DLL pipeline
+        self.process_enc = None # MP2 encoder with UECP (between the PCM and output FFmpeg processes)
+        self.uecp_server = None
+        self.uecp_queue = None
+        self.uecp_warning = ""
         self.running = False
         self.start_time = None
         self.last_title = ""
@@ -304,9 +316,32 @@ class StreamManager:
             try: sock.close()
             except: pass
         self.rtp_sockets = []
-        
-        # Safely and selectively stop the FFmpeg processes associated with this stream
-        for proc in [self.process, self.process_out]:
+
+        self._terminate_processes()
+        self._release_uecp()
+
+        self.start_time = None
+        self.vu_l = -60.0
+        self.vu_r = -60.0
+        self.peak_l = -60.0
+        self.peak_r = -60.0
+        self.listeners = -1
+        self.sdp_content = ""
+        self.last_title = ""
+        self.pending_title = ""
+
+    def _release_uecp(self):
+        srv, q = self.uecp_server, self.uecp_queue
+        self.uecp_server = None
+        self.uecp_queue = None
+        self.uecp_warning = ""
+        if srv:
+            uecp.unsubscribe(srv, q)
+
+    def _terminate_processes(self):
+        # Safely and selectively stop the FFmpeg processes associated with this stream.
+        # In order, so closing the PCM FFmpeg's input lets the MP2 UECP chain drain and exit by itself.
+        for proc in [self.process, self.process_enc, self.process_out]:
             if proc:
                 try:
                     if proc.stdin:
@@ -326,18 +361,10 @@ class StreamManager:
                         proc.kill()
                         proc.wait(timeout=1.0)
                 except: pass
-                
+
         self.process = None
+        self.process_enc = None
         self.process_out = None
-        self.start_time = None
-        self.vu_l = -60.0
-        self.vu_r = -60.0
-        self.peak_l = -60.0
-        self.peak_r = -60.0
-        self.listeners = -1
-        self.sdp_content = ""
-        self.last_title = ""
-        self.pending_title = ""
 
     def _check_unreachable_alert(self):
         if self.unreachable_start_time == 0:
@@ -380,7 +407,19 @@ class StreamManager:
     def _run_loop(self):
         reconnect_delay = int(self.settings.get("reconnect_delay", 5))
         first_attempt = True
-        
+
+        # --- UECP (RDS) INPUT (ONCE PER RUN, SO THE RDS ENCODER STAYS CONNECTED ACROSS RECONNECTIONS) ---
+        if uecp.stream_wants_uecp(self.config) and not self.uecp_server:
+            port = int(self.config.get("uecp_port", uecp.DEFAULT_PORT) or uecp.DEFAULT_PORT)
+            try:
+                self.uecp_server, self.uecp_queue = uecp.subscribe(port, self.log_callback)
+            except (OSError, ValueError) as e:
+                self.startup_failed = True
+                self.startup_error_msg = f"Failed to open the UECP (RDS) input on TCP port {port}. The port might be in use.\nError: {e}"
+                self.running = False
+                self.is_connecting = False
+                return
+
         # --- HARDWARE INITIALIZATION (ONCE FOR THE ENTIRE LIFETIME OF THE STREAM) ---
         audio_device = self.config.get("audio_device", "")
         import re
@@ -463,9 +502,10 @@ class StreamManager:
             while self.running:
                 p_alive = self.process and self.process.poll() is None
                 p_out_alive = self.process_out and self.process_out.poll() is None if getattr(self, 'process_out', None) else True
-                
-                if not p_alive or not p_out_alive:
-                    break 
+                p_enc_alive = self.process_enc.poll() is None if self.process_enc else True
+
+                if not p_alive or not p_out_alive or not p_enc_alive:
+                    break
                 
                 self.is_connecting = False 
                 if first_attempt and (time.time() - process_start_time > 6.0):
@@ -480,7 +520,10 @@ class StreamManager:
 
             # --- EXIT PHASE (DEAD PROCESS) ---
             if self.running:
-                self.is_connecting = True 
+                # One process of a multi-process chain died: stop the rest before starting again
+                if self.process_enc:
+                    self._terminate_processes()
+                self.is_connecting = True
                 if first_attempt:
                     self.startup_failed = True
                     lang = self.settings.get('language', 'en')
@@ -496,7 +539,11 @@ class StreamManager:
                     # Classical disconnection
                     self._check_unreachable_alert()
                     time.sleep(reconnect_delay)
-                    
+
+        # Startup failure: free the UECP port now rather than when the user next presses Stop
+        if not self.running:
+            self._release_uecp()
+
     def _start_ffmpeg(self, is_startup=False):
         targets = [s for s in self.servers if s["id"] in self.config.get("targets", [])]
         if not targets:
@@ -544,24 +591,42 @@ class StreamManager:
             success = self._start_fdk_pipeline(dll_path, format_audio, bitrate, "", gain, channels, sample_rate)
             return success
 
+        # --- MP2 WITH UECP (RDS): libtoolame-dab encoder instead of FFmpeg's ---
+        # FFmpeg (PCM) -> _mp2_uecp_pump (adds UECP bytes) -> mp2_uecp_x64.exe -> FFmpeg (-c:a copy) -> destinations
+        mp2_uecp = format_audio == "mp2" and self.uecp_queue is not None
+        if mp2_uecp and not os.path.exists(get_mp2_uecp_path()):
+            if is_startup:
+                self.startup_failed = True
+                self.startup_error_msg = f"MISSING FILE: {os.path.basename(get_mp2_uecp_path())} not found.\nIt is required to embed RDS (UECP) data in MP2 streams. Build it from native/mp2_uecp, or disable RDS (UECP) embedding for this stream."
+                self.running = False
+            return False
+
         # --- OTHER CODECS MANAGEMENT ---
         af_parts = []
-        
+
         if format_audio not in ["wav", "flac"] and bit_depth == "16":
             af_parts.append("aformat=sample_fmts=s16")
-            
+
         audio_filter = ",".join(af_parts) if af_parts else None
 
-        cmd = [
-            self.ffmpeg_path, "-y", "-hide_banner", "-nostats",
-            "-f", "f32le", "-ar", str(self.capture_native_rate), "-ac", "2", "-i", "pipe:0"
-        ]
-        if audio_filter:
-            cmd.extend(["-af", audio_filter])
-        
+        if mp2_uecp:
+            # Already encoded: MP2 frames read from the encoder, copied untouched (ancillary data included)
+            cmd = [
+                self.ffmpeg_path, "-y", "-hide_banner", "-nostats",
+                "-f", "mp3", "-i", "pipe:0"
+            ]
+        else:
+            cmd = [
+                self.ffmpeg_path, "-y", "-hide_banner", "-nostats",
+                "-f", "f32le", "-ar", str(self.capture_native_rate), "-ac", "2", "-i", "pipe:0"
+            ]
+            if audio_filter:
+                cmd.extend(["-af", audio_filter])
+
         if targets:
             cmd.extend(["-map", "0:a"])
-            if format_audio == "mp3": cmd.extend(["-c:a", "libmp3lame", "-b:a", bitrate, "-ac", channels, "-ar", str(s_rate)])
+            if mp2_uecp: cmd.extend(["-c:a", "copy"])
+            elif format_audio == "mp3": cmd.extend(["-c:a", "libmp3lame", "-b:a", bitrate, "-ac", channels, "-ar", str(s_rate)])
             elif format_audio == "mp2": cmd.extend(["-c:a", "mp2", "-b:a", bitrate, "-ac", channels, "-ar", str(s_rate)])
             elif format_audio == "opus": cmd.extend(["-c:a", "libopus", "-application", "audio", "-b:a", bitrate, "-ac", channels, "-ar", str(s_rate)])
             elif format_audio == "ogg": cmd.extend(["-c:a", "libvorbis", "-b:a", bitrate, "-ac", channels, "-ar", sample_rate])
@@ -643,6 +708,8 @@ class StreamManager:
                     cmd.extend(["-f", muxer, f"udp://127.0.0.1:{self.internal_servers[0].udp_port}"])
 
         kwargs = {'creationflags': 0x08000000} if platform.system() == "Windows" else {}
+        if mp2_uecp:
+            return self._start_mp2_uecp_chain(cmd, int(channels), s_rate, bitrate, is_startup, kwargs)
         try:
             self.last_ffmpeg_error = ""
             self.sdp_content = ""
@@ -667,6 +734,73 @@ class StreamManager:
                 self.startup_error_msg = f"Failed to launch FFmpeg: {str(e)}"
                 self.running = False
             return False
+
+    # Defaults as UecpSource: joint stereo, psychoacoustic model 2 (best quality)
+    MP2_UECP_JOINT_STEREO = 1
+    MP2_UECP_PSY_MODEL = 2
+
+    def _start_mp2_uecp_chain(self, out_cmd, channels, s_rate, bitrate, is_startup, kwargs):
+        """FFmpeg (capture -> s16 PCM) -> _mp2_uecp_pump -> mp2_uecp_x64.exe -> FFmpeg out_cmd (-c:a copy)."""
+        b_rate = int(str(bitrate).replace('k', ''))
+        pcm_cmd = [
+            self.ffmpeg_path, "-y", "-hide_banner", "-loglevel", "error",
+            "-f", "f32le", "-ar", str(self.capture_native_rate), "-ac", "2", "-i", "pipe:0",
+            "-f", "s16le", "-ac", str(channels), "-ar", str(s_rate), "pipe:1"
+        ]
+        enc_cmd = [get_mp2_uecp_path(), str(s_rate), str(channels), str(b_rate),
+                   str(self.MP2_UECP_JOINT_STEREO if channels == 2 else 0), str(self.MP2_UECP_PSY_MODEL)]
+        err_lines = []
+
+        def read_stderr(proc, label):
+            for line in iter(proc.stderr.readline, b''):
+                decoded = line.decode('utf-8', errors='ignore').strip()
+                if decoded:
+                    err_lines.append(f"[{label}] {decoded}" if label else decoded)
+                    if len(err_lines) > 15: err_lines.pop(0)
+                    self.last_ffmpeg_error = "\n".join(err_lines)
+
+        try:
+            self.last_ffmpeg_error = ""
+            self.sdp_content = ""
+            self.process = subprocess.Popen(pcm_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0, **kwargs)
+            self.process_enc = subprocess.Popen(enc_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0, **kwargs)
+            self.process_out = subprocess.Popen(out_cmd, stdin=self.process_enc.stdout, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, bufsize=0, **kwargs)
+            self.process_enc.stdout.close() # the output FFmpeg owns it now, so it sees the encoder exit
+        except Exception as e:
+            self.last_ffmpeg_error = str(e)
+            self._terminate_processes()
+            if is_startup:
+                self.startup_failed = True
+                self.startup_error_msg = f"Failed to launch the MP2 (RDS/UECP) encoder: {str(e)}"
+                self.running = False
+            return False
+
+        for proc, label in ((self.process, "PCM"), (self.process_enc, "MP2 encoder"), (self.process_out, "")):
+            threading.Thread(target=read_stderr, args=(proc, label), daemon=True).start()
+        threading.Thread(target=self._mp2_uecp_pump, args=(self.process, self.process_enc, self.uecp_queue, channels), daemon=True).start()
+        return True
+
+    def _mp2_uecp_pump(self, pcm_proc, enc_proc, uecp_queue, channels):
+        """Sends each 1152-sample PCM frame to the encoder, preceded by the UECP bytes it should carry."""
+        frame_bytes = 1152 * channels * 2
+        try:
+            while self.running and pcm_proc.poll() is None:
+                pcm = bytearray()
+                while len(pcm) < frame_bytes:
+                    chunk = pcm_proc.stdout.read(frame_bytes - len(pcm))
+                    if not chunk: return
+                    pcm += chunk
+                anc = uecp_queue.peek(uecp.MP2_BYTES_PER_FRAME)
+                data = memoryview(bytes([len(anc)]) + anc + pcm)
+                while data:
+                    data = data[enc_proc.stdin.write(data):]
+                if anc: uecp_queue.consume(len(anc)) # MP2 always carries everything it's given
+        except Exception:
+            pass
+        finally:
+            # end of input: the encoder flushes and exits, and the output FFmpeg after it
+            try: enc_proc.stdin.close()
+            except Exception: pass
 
     def _start_fdk_pipeline(self, dll_path, format_audio, bitrate, audio_device, gain, channels, sample_rate):
         import queue
@@ -769,12 +903,31 @@ class StreamManager:
             fdk.aacEncoder_SetParam(self.h_fdk, 0x0106, target_ch)
             fdk.aacEncoder_SetParam(self.h_fdk, 0x0101, b_rate * 1000)
             
-            fdk.aacEncoder_SetParam(self.h_fdk, 0x0302, 0) 
-            fdk.aacEncoder_SetParam(self.h_fdk, 0x0300, 2) 
+            fdk.aacEncoder_SetParam(self.h_fdk, 0x0302, 0)
+            fdk.aacEncoder_SetParam(self.h_fdk, 0x0300, 2)
             fdk.aacEncEncode(self.h_fdk, None, None, None, None)
         except Exception as e:
             self.last_ffmpeg_error = f"DLL ERROR: {e}"
             return False
+
+        # UECP (RDS): carried in a data stream element of each frame. fdk-aac only allows
+        # (bitrate - 8 kbps per channel) worth of DSE bytes per frame, so check what's available.
+        anc_max = 0
+        uecp_queue = self.uecp_queue
+        if uecp_queue is not None:
+            anc_max = uecp.AAC_BYTES_PER_FRAME
+            try:
+                fdk.aacEncInfo.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+                info = (ctypes.c_uint * 64)() # AACENC_InfoStruct: maxOutBufBytes, maxAncBytes, ...
+                if fdk.aacEncInfo(self.h_fdk, ctypes.byref(info)) == 0:
+                    anc_max = min(anc_max, int(info[1]))
+            except Exception:
+                pass
+            if anc_max <= 0:
+                self.uecp_warning = "Bitrate too low to carry RDS (UECP) data with this AAC profile."
+                if self.log_callback and not getattr(self, '_uecp_warned', False):
+                    self._uecp_warned = True
+                    self.log_callback("WARNING", f"Stream \"{self.config.get('name', 'Unknown')}\": bitrate too low to carry RDS (UECP) data, it will not be embedded.")
 
         # 5. Queue and Process Launch
         self.q = queue.Queue(maxsize=1000)
@@ -818,15 +971,18 @@ class StreamManager:
             self.f_sz = self.frame_len * target_ch * 2
             self.b_pcm = ctypes.create_string_buffer(self.f_sz)
             self.b_aac = ctypes.create_string_buffer(65536)
-            self.p_i = (ctypes.c_void_p * 1)(ctypes.addressof(self.b_pcm))
-            self.s_i = (ctypes.c_int * 1)(self.f_sz)
-            self.id_i = (ctypes.c_int * 1)(0)
-            self.e_i = (ctypes.c_int * 1)(2)
+            self.b_anc = ctypes.create_string_buffer(64)
+            # Buffer 0: audio (IN_AUDIO_DATA = 0). Buffer 1, only with UECP: ancillary data (IN_ANCILLRY_DATA = 1)
+            self.p_i = (ctypes.c_void_p * 2)(ctypes.addressof(self.b_pcm), ctypes.addressof(self.b_anc))
+            self.s_i = (ctypes.c_int * 2)(self.f_sz, 0)
+            self.id_i = (ctypes.c_int * 2)(0, 1)
+            self.e_i = (ctypes.c_int * 2)(2, 1)
             self.p_o = (ctypes.c_void_p * 1)(ctypes.addressof(self.b_aac))
             self.s_o = (ctypes.c_int * 1)(65536)
             self.id_o = (ctypes.c_int * 1)(3)
             self.e_o = (ctypes.c_int * 1)(1)
-            d_i = AACENC_BufDesc(1, ctypes.addressof(self.p_i), ctypes.addressof(self.id_i), ctypes.addressof(self.s_i), ctypes.addressof(self.e_i))
+            n_in_bufs = 2 if anc_max > 0 else 1
+            d_i = AACENC_BufDesc(n_in_bufs, ctypes.addressof(self.p_i), ctypes.addressof(self.id_i), ctypes.addressof(self.s_i), ctypes.addressof(self.e_i))
             d_o = AACENC_BufDesc(1, ctypes.addressof(self.p_o), ctypes.addressof(self.id_o), ctypes.addressof(self.s_o), ctypes.addressof(self.e_o))
             a_i = AACENC_InArgs(self.frame_len * target_ch, 0); a_o = AACENC_OutArgs(0, 0, 0)
             acc = bytearray()
@@ -841,7 +997,16 @@ class StreamManager:
                     
                     self.s_i[0] = self.f_sz; self.s_o[0] = 65536
                     a_i.numInSamples = self.frame_len * target_ch
+
+                    anc = uecp_queue.peek(anc_max) if anc_max > 0 else b""
+                    if anc: ctypes.memmove(self.b_anc, anc, len(anc))
+                    self.s_i[1] = len(anc)
+                    a_i.numAncBytes = len(anc)
+
                     if fdk.aacEncEncode(self.h_fdk, ctypes.byref(d_i), ctypes.byref(d_o), ctypes.byref(a_i), ctypes.byref(a_o)) == 0:
+                        # Only what the encoder actually embedded is removed; the rest goes in the next frame
+                        if anc and a_o.numAncBytes > 0:
+                            uecp_queue.consume(a_o.numAncBytes)
                         if a_o.numOutBytes > 0:
                             if not self.q.full(): self.q.put(self.b_aac.raw[:a_o.numOutBytes])
             finally:
@@ -1263,5 +1428,20 @@ class StreamManager:
             "vu_l": self.vu_l,
             "vu_r": self.vu_r,
             "listeners": self.listeners,
-            "sdp": getattr(self, 'sdp_content', "")
+            "sdp": getattr(self, 'sdp_content', ""),
+            "uecp": self._uecp_status()
+        }
+
+    def _uecp_status(self):
+        srv, q = self.uecp_server, self.uecp_queue
+        if not srv or not q:
+            return None
+        return {
+            "port": srv.port,
+            "client": srv.client_addr if srv.client_connected else "",
+            "received": srv.frames_received,
+            "embedded": q.embedded,
+            "queued_bytes": q.queued,
+            "dropped": q.dropped,
+            "warning": self.uecp_warning,
         }
